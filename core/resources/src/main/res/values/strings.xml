@@ -1,0 +1,333 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_label" translatable="false">GSplit</string>
+    <string name="macro_droid" translatable="false">MacroDroid</string>
+
+    <string name="delete">Delete</string>
+    <string name="copy_id">Copy ID</string>
+    <string name="enable_autorun">Enable Autorun</string>
+    <string name="disable_autorun">Disable Autorun</string>
+
+    <string name="enable_dark_background">Enable Dark Background</string>
+    <string name="disable_dark_background">Disable Dark Background</string>
+
+    <string name="click_to_close">Click to close</string>
+    <string name="touch_to_exit">Touch the screen to exit</string>
+
+    <string name="window_overlap_msg">To enable the app to function, allow it to display over other windows. Find the app in the list and enable this feature.</string>
+    <string name="freeform_mode_msg">To run apps in windowed mode, you need to activate \"Freeform Mode.\" Enable \"Allow creation of freeform windows\" and \"Resize in multi-window mode.\" \n\nAlternatively, use the following adb commands: \n\"adb shell settings put global enable_freeform_support 1\" and \n\"adb shell settings put global force_resizable_activities 1\".</string>
+
+    <string name="add_first_app">Click here to select the first app.</string>
+    <string name="add_second_app">Click here to select the second app.</string>
+
+    <string name="choosing_an_app">Choosing an app</string>
+    <string name="scanning_installed_apps">Scanning installed apps</string>
+    <string name="creating_a_preset">Creating a preset</string>
+    <string name="editing_a_preset">Editing a preset</string>
+    <string name="runs_on_app_startup">Run on app startup</string>
+    <string name="interface_size">Interface size</string>
+    <string name="ui_scale_factor">UI scale factor</string>
+
+    <string name="enable_dev_mode_guid">To activate \"Freeform Mode\", enable Developer Mode. Go to \"About phone\", find \"Build number\", tap it 7 times until Developer Mode is activated.</string>
+    <string name="enable_dev_mode_car_guid">To activate \"Freeform Mode\", enable Developer Settings by running the command: \"adb shell settings put global development_settings_enabled 1\"</string>
+
+    <string name="about_phone">About phone</string>
+    <string name="gsplit_preset">GSplit preset</string>
+    <string name="select_an_preset">Select a preset</string>
+
+    <string name="system_bar_compensator_title">System bar compensation</string>
+    <string name="system_bar_compensator_desc">Adds window padding to accommodate the Status Bar and Navigation Bar. Toggle if the lower window exceeds the bottom screen edge.</string>
+
+    <string name="minimize_by_run_title">Minimize after preset launch by tap</string>
+    <string name="minimize_by_autorun_title">Minimize after preset autorun</string>
+    <string name="minimize_by_autorun_desc">Minimize the app to avoid it appearing behind opened windows.</string>
+
+    <string name="top_panel_indentation_title">Top panel indentation</string>
+    <string name="top_panel_indentation_desc">Extra padding prevents interface bleed-through under transparent title bars. Also shifts the \"Back\" button position on \"Dark Background\".</string>
+
+    <string name="bottom_window_shift_size_title">Bottom window shift size</string>
+    <string name="bottom_window_shift_size_desc">Size in pixels indicating how much the bottom split window overlaps the top window when \"Window shift\" is enabled.</string>
+
+    <string name="context_adaptive_window_title">Context-adaptive window sizing</string>
+    <string name="context_adaptive_window_desc">Uses modern APIs when available on the device. Supports screen cutouts and dynamic padding. May incorrectly calculate sizes on older Android versions.</string>
+
+    <string name="autostart_minimize_delay_title">Minimize delay after preset autorun</string>
+    <string name="autostart_minimize_delay_desc">Enable if windows launch incorrectly after autorun or if minimization animation is visible during startup. Mostly required for Android 12 and above.</string>
+
+    <string name="exp_native_split_title">Experimental native split implementation</string>
+    <string name="exp_native_split_desc">Split launch via Accessibility API. Compatible with Android 9 and above. Some required services may be unavailable on automotive firmware.</string>
+
+    <string name="autoplay">Auto-start playback</string>
+    <string name="autoplay_s">Autoplay</string>
+    <string name="autoplay_desc">Interval between app launch and sending the \"play\" event. Increase if the app doesn\'t open within the given interval.</string>
+
+    <string name="main_list_empty">Press \"+\" to add new presets</string>
+    <string name="scheduler_list_empty">Press \"+\" to schedule an app launch</string>
+    <string name="add_quick_access_app">Tap \"+\" to add a quick access app</string>
+
+    <string name="soft_kill_app_title">Soft close apps before window launch</string>
+    <string name="soft_kill_app_desc">Attempts to stop running apps using standard Android methods. Will not stop if the app is in foreground or high priority. May help recreate interfaces correctly.</string>
+
+    <string name="autostart">Autorun</string>
+
+    <string name="self_autostart_title">Launch on device startup</string>
+    <string name="self_autostart_desc">Automatically launches GSplit after system boot.</string>
+
+    <string name="self_autostart_in_bg_title">Launch in background</string>
+    <string name="self_autostart_in_bg_desc">Launches the autorun preset without displaying the app interface. If no preset is selected, the split won\'t launch, but task scheduler will run.</string>
+
+    <string name="self_autostart_by_connect_title">Launch after internet connection</string>
+    <string name="self_autostart_by_connect_desc">App waits for an internet connection before launching the autorun preset.</string>
+
+    <string name="self_autostart_delay_title">App autorun delay</string>
+    <string name="self_autostart_delay_desc">Launching GSplit at startup has high priority. Add a delay to let other apps load first.</string>
+
+    <string name="launch_scheduler_title">Launch scheduler</string>
+    <string name="launch_scheduler_desc">Schedule launches of other apps before or after split autorun upon device startup.</string>
+
+    <string name="height_corrector_title">Window Height Adjustment</string>
+    <string name="height_corrector_desc">If the window height is displayed incorrectly on your device, you can fix it using this setting. Works only if the \"System panels compensation\" option is enabled.</string>
+
+    <string name="ym_compat_title">Yandex Music Compatibility Mode</string>
+    <string name="ym_compat_desc">Launches Yandex Music in compatibility mode. The “Playback Autostart” feature resumes playback from the last source and opens the cover screen. Not compatible with the latest versions of Yandex Music.</string>
+    <string name="murglar_compat_title">Murglar Compatibility Mode</string>
+    <string name="murglar_compat_desc">Launches Murglar in compatibility mode. The "Autoplay" function opens the track cover screen and resumes playback from the last source.</string>
+    <string name="vkx_compat_title">VKX Compatibility Mode</string>
+    <string name="vkx_compat_desc">Launches VKX in compatibility mode. The "Autoplay" function opens the track cover screen and resumes playback from the last source.</string>
+
+    <string name="general">General</string>
+    <string name="launching_presets">Launching presets</string>
+    <string name="startup_conditions">Startup conditions</string>
+    <string name="ui">Interface</string>
+    <string name="additional_features">Additional features</string>
+
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="edit">Edit</string>
+
+    <string name="turn_on_auto_launch">Enable autorun</string>
+    <string name="schedule_a_launch">Schedule launch</string>
+    <string name="time_after_autostart">Launch after</string>
+    <string name="time_before_autostart">Launch before</string>
+    <string name="launch_direction">Launch order</string>
+    <string name="before_split">Before split</string>
+    <string name="after_split">After split</string>
+
+    <string name="enable_shift">Enable window shift</string>
+    <string name="disable_shift">Disable window shift</string>
+
+    <string name="deleting_a_preset">Delete</string>
+    <string name="deleting_a_preset_confirm">Are you sure you want to delete this preset?</string>
+    <string name="deleting_a_autorun_confirm">Are you sure you want to delete this autorun?</string>
+    <string name="deleting_a_quick_app_confirm">Are you sure you want to delete this quick launch app?</string>
+
+    <string name="waiting_for_split_auto_start">Waiting for split autorun</string>
+    <string name="preset_autorun_channel">Preset Autorun Channel</string>
+    <string name="preset_autorun_channel_desc">Channel used to autorun presets when the device starts</string>
+
+    <string name="enable_AccessibilityService_step_one">To ensure launch at system startup, you need to grant accessibility permissions to the app. Go to settings, find the app in the list, and enable \"Use GSplit.\"</string>
+    <string name="enable_AccessibilityService_step_two">Enable Accessibility Monitoring in MacroDroid. Open MacroDroid -> Settings -> Accessibility Monitoring and activate it for GSplit.</string>
+
+    <string name="settings">Settings</string>
+    <string name="general_behavior">General behavior</string>
+    <string name="other">Other</string>
+
+    <string name="modes">Modes</string>
+    <string name="window_shift">Window shift</string>
+    <string name="dark_background">Dark background</string>
+
+    <string name="overlay">Overlay</string>
+    <string name="overlay_notification_description">Displaying the split window interaction overlay</string>
+
+    <string name="split_close">Split close</string>
+    <string name="split_close_description">Floating button to close open windows with one tap</string>
+    <string name="app_switch">App switch</string>
+    <string name="app_switch_description">Quick switching between apps in an open split</string>
+
+    <string name="hide_lower_system_bar">Hides the top system bar of the lower window by overlaying one window on another</string>
+    <string name="dark_background_split">Displays a dark background under open split windows</string>
+
+    <string name="interface_display_settings">Internal interface display settings</string>
+    <string name="freeform_window_settings">Parameters related to launching windows in freeform mode, timing settings, and general behavior</string>
+    <string name="auto_start_presets">Automatic start of presets on device boot and additional launch scheduler</string>
+    <string name="quick_android_settings">Quick access to Android settings</string>
+
+    <string name="launch_with_tasks">Launch with tasks</string>
+    <string name="send_additional_actions">Sending additional actions to the opened application</string>
+
+    <string name="automation">Automation</string>
+    <string name="keep_focus">Keep focus</string>
+    <string name="keep_focus_desc">Restores focus to the first window when it loses focus, ensuring the first window is always displayed above the second.</string>
+    <string name="auto_close">Auto close</string>
+    <string name="auto_close_desc">Closes the black screen after the split windows disappear from the screen.</string>
+    <string name="music_aggregators">Music aggregators</string>
+
+    <string name="appearance">Appearance</string>
+    <string name="size">Size</string>
+    <string name="background_transparency">Background transparency</string>
+    <string name="icon_transparency">Icon transparency</string>
+    <string name="enable_overlay">Enable overlay</string>
+    <string name="overlay_button_close_desc">Display an overlay button on the screen for quickly closing the split</string>
+    <string name="overlay_replace_button_desc">Display an overlay button on the screen for quickly replacing windows</string>
+    <string name="window_shift_before_closing">Window shift before closing</string>
+    <string name="window_shift_desc">If your system has system-wide \"back\" gestures from the screen edges, enable this setting.</string>
+    <string name="sequential_closing">Sequential closing</string>
+    <string name="sequential_closing_desc">The second window will start closing only after the first window has fully closed</string>
+    <string name="reset_position">Reset position</string>
+    <string name="reset_position_desc">Returns the overlay to its initial position</string>
+    <string name="window_closing_pause">Pause between window closing</string>
+    <string name="window_closing_pause_desc">Manual timing between window closings when the \"Sequential closing\" option is disabled. The slower it is, the more stable</string>
+    <string name="position_reset">Position reset</string>
+    <string name="back_button">Back button</string>
+    <string name="back_button_display">Display the \"back\" button on a dark background</string>
+    <string name="preview">Preview</string>
+    <string name="quick_launch_apps">Quick launch apps</string>
+    <string name="quick_launch_apps_desc">Configure a set of apps and their parameters for quick launch using the overlay button</string>
+    <string name="available_in">available in</string>
+    <string name="top_window">Top window</string>
+    <string name="bottom_window">Bottom window</string>
+    <string name="left_window">Left window</string>
+    <string name="right_window">Right window</string>
+    <string name="add_app">Add app</string>
+    <string name="adding_app">Adding an app</string>
+    <string name="overlay_size">Overlay size</string>
+    <string name="window_size">Window size</string>
+    <string name="add_quick_access_apps">Add quick access apps</string>
+    <string name="opened_in_adjacent_window">Opened in adjacent window</string>
+    <string name="enable_quick_access">Enable quick access</string>
+    <string name="disable_quick_access">Disable quick access</string>
+    <string name="presets">Presets</string>
+    <string name="manage_presets_and_windows">Manage presets and windows from other apps</string>
+    <string name="send_events_to_macrodroid">Send events</string>
+    <string name="send_events_to_macrodroid_desc">Transmits the current state of the split and open windows, allowing other app to determine whether a split is currently active and which specific windows are open</string>
+    <string name="synchronization">Synchronization</string>
+    <string name="accessibility_permission_prompt">To activate the feature, the app requires accessibility permissions. Go to settings, find the app in the list, and enable \"Use GSplit.\"</string>
+    <string name="enable">Enable</string>
+
+    <string name="telegram_not_installed">Telegram is not installed</string>
+    <string name="sec">sec</string>
+    <string name="multi_window_preparation">Preparing Multi-Window</string>
+    <string name="multi_window_prep_guide">If windows fail to launch or only the second window opens, set an additional delay for multi-window preparation.</string>
+    <string name="cross_launch_preparation">Pause Between Window Launches</string>
+    <string name="cross_launch_prep_guide">If the second window doesn\'t launch or launches incorrectly, set an additional delay between launching apps.</string>
+    <string name="instead_of_split">Instead of split</string>
+
+    <string name="quick_launch_window">Quick launch window</string>
+    <string name="app_names">App names</string>
+    <string name="display_app_names">Display app names below icons</string>
+    <string name="action_overlay_pin">Pin</string>
+    <string name="action_overlay_pin_description">Prevents dragging the overlay across the screen</string>
+
+    <string name="standby_mode">Standby mode</string>
+    <string name="standby_mode_description">If you switch to a fullscreen app from split-screen mode, the window detection service will enter standby mode after a while. Upon returning to split-screen mode, overlays will not appear, and the dark screen will not close automatically. The service will resume operation when you start a new split.</string>
+    <string name="confirm_reset_overlay_position">Are you sure you want to reset the overlay position?</string>
+    <string name="app_names_for_windows">App names for windows</string>
+    <string name="app_names_for_presets">App names for presets</string>
+    <string name="last_launched">Last launched</string>
+    <string name="last_launched_split">Last launched split</string>
+    <string name="launch_history">Launch history</string>
+    <string name="show_last_launched_split">Show last launched split</string>
+    <string name="display_last_launched_split">Display the last launched split configuration in the preset list on the main screen</string>
+    <string name="contrast_border">Contrast border</string>
+    <string name="contrast_border_desc">A more prominent border around the last launched split item</string>
+
+    <string name="adb_features">ADB</string>
+    <string name="adb_features_description">Parameters related to the execution of auxiliary ADB commands</string>
+    <string name="adb_helper">ADB Helper</string>
+    <string name="adb_helper_description">Unlocks features related to executing ADB commands</string>
+    <string name="force_kill_app_title">Force-stop apps before launching in windows</string>
+    <string name="force_kill_app_desc">Force-stop running applications via ADB command. Closes apps if they were previously opened in fullscreen mode.</string>
+    <string name="connection_port">Connection port</string>
+    <string name="connected">Connected</string>
+    <string name="connecting">Connecting</string>
+    <string name="disconnected">Disconnected</string>
+    <string name="error">Error</string>
+    <string name="configuration">Configuration</string>
+    <string name="your_car">Car</string>
+    <string name="do_not_use">Do not use</string>
+    <string name="adb_overlay_features">Overlay features via ADB</string>
+    <string name="adb_overlay_features_desc">A faster, more reliable, and simpler way to use overlay features. Instant split window closing via close overlay. Instant app switching via quick window replacement overlay.</string>
+    <string name="connection">Connection</string>
+    <string name="direct_window_control">Direct window control</string>
+    <string name="new_version_available">New version available</string>
+    <string name="details">Details</string>
+    <string name="download">Download</string>
+    <string name="data_fetch_failed">Failed to retrieve data. Please check your internet connection.</string>
+    <string name="off">Off</string>
+    <string name="enter_your_port">Enter your port number</string>
+
+    <string name="about_text"><![CDATA[<strong>Contacts:</strong><br>email: <a href="#email">%1$s</a>&#10240;<br>tg: <a href="#tg">%2$s</a>&#10240;]]></string>
+    <string name="api_text"><![CDATA[<strong>Retrieving the Current Split State</strong>
+<br>
+In MacroDroid: Triggers -> Intent Received
+<br>
+<strong>Action 1</strong>: \"com.salat.gsplit.INIT_SPLIT\" - before launch
+<br>
+<strong>Action 2</strong>: \"com.salat.gsplit.SPLIT_STATE\" - split state
+<br>
+<br>
+<strong>Extra 1</strong>: \"is_active\" -> value \"*\" -> select the variable to store the value.
+<br>
+Takes the value \"1\" when at least one window is displayed in the foreground, and \"0\" when no windows are in the foreground.
+<br>
+<br>
+<strong>Extra 2</strong>: \"first_window\" -> value \"*\" -> select the variable to store the value.
+<br>
+Takes the package name of the first (top) window when the window is active; returns an empty string when no window is active.
+<br>
+<br>
+<strong>Extra 3</strong>: \"second_window\" -> value \"*\" -> select the variable to store the value.
+<br>
+Takes the package name of the second (bottom) window when the window is active; returns an empty string when no window is active.
+<br>
+<br>
+You can then monitor these variables in your scripts to detect the current split state.]]></string>
+    <string name="api_text2"><![CDATA[<strong>Launching Presets via Shortcuts:</strong>
+<br>
+Send the intent \"com.salat.gsplit.PresetLauncherActivity\" and pass the parameter \"id\" with the identifier of the preset you want to launch.
+<br>
+<br>
+<strong>Launching from MacroDroid:</strong>
+<br>
+Actions -> Launch Shortcut -> GSplit Preset.]]></string>
+    <string name="api_text3"><![CDATA[<strong>Split Management</strong>
+<br>
+Send Broadcast -> package = \"com.salat.gsplit\" -> Required action with parameters:
+<br>
+<br>
+<strong>Action 1</strong>: \"com.salat.gsplit.CLOSE_SPLIT\"
+<br>
+Closes the currently open split.
+<br>
+<br>
+<strong>Action 2</strong>: \"com.salat.gsplit.REPLACE_WINDOW\"
+<br>
+Parameters: target:[first|second], package, auto_play:[0|1]
+<br>
+Replaces the current window of the open split with the application specified by the package name.
+<br>
+<br>
+<strong>Action 3</strong>: \"com.salat.gsplit.LAUNCH\"
+<br>
+Parameters: id
+<br>
+Launches a preset by id. Closes the current split if it is open.
+<br>
+<br>
+<strong>Action 4</strong>: \"com.salat.gsplit.LAUNCH_LAST\"
+<br>
+Launches the last used split configuration. Closes the current split if it is open.
+<br>
+<br>
+<strong>Action 5</strong>: \"com.salat.gsplit.LAUNCH_AUTOSTART\"
+<br>
+Launches the autostart split configuration.
+<br>
+<br>
+<strong>Action 6</strong>: \"com.salat.gsplit.CUSTOM_LAUNCH\"
+<br>
+Parameters: first_package, second_package, first_auto_play:[0|1], second_auto_play:[0|1], type:[1x1|2x1|…], dark_background:[0|1], window_shift:[0|1]
+<br>
+Launches a split with the specified configuration.]]></string>
+<!--    <string name="about_text"><![CDATA[<strong>Launching from other apps:</strong><br>Send an intent \"com.salat.gsplit.PresetLauncherActivity\" with the parameter \"id\" containing the preset identifier to launch.<br><br><strong>Launching from MacroDroid:</strong><br>Actions -> Launch Shortcut -> GSplit Preset.<br><br><strong>Contacts:</strong><br>email: <a href="#email">%1$s</a>&#10240;<br>tg: <a href="#tg">%2$s</a>&#10240;]]></string>-->
+</resources>

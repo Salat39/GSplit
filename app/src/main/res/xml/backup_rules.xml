@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<full-backup-content>
+    <!-- Don't sync preferences because it often contains device-specific data -->
+    <exclude domain="sharedpref" path="." />
+    <exclude domain="sharedpref" path="appsflyer-data"/>
+</full-backup-content>

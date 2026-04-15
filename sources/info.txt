@@ -1,0 +1,2 @@
+size=42
+background=107

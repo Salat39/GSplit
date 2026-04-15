@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.GSplit.Starting" parent="Theme.SplashScreen">
+        <item name="android:windowSplashScreenBackground">@color/splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/splash_inset</item>
+        <item name="postSplashScreenTheme">@style/Theme.GSplit.AppTheme</item>
+    </style>
+</resources>

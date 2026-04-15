@@ -1,0 +1,326 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="delete">Удалить</string>
+    <string name="copy_id">Скопировать ID</string>>
+    <string name="enable_autorun">Включить автозапуск</string>
+    <string name="disable_autorun">Выключить автозапуск</string>
+
+    <string name="enable_dark_background">Включить тёмный фон</string>
+    <string name="disable_dark_background">Выключить тёмный фон</string>
+
+    <string name="click_to_close">Нажмите чтобы закрыть</string>
+    <string name="touch_to_exit">Коснитесь экрана, чтобы закрыть</string>
+
+    <string name="window_overlap_msg">Для работы приложения разрешите ему отображаться поверх других окон. Найдите приложение в списке и включите эту функцию</string>
+    <string name="freeform_mode_msg">Для работы приложений в оконном режиме нужно активировать \"Freeform Mode\". Включите «Разрешить создание окон произвольной формы» и «Изменение размера в многооконном режиме». \n\nИли выполните adb команды: \n\"adb shell settings put global enable_freeform_support 1\" и \n\"adb shell settings put global force_resizable_activities 1\"</string>
+
+    <string name="add_first_app">Нажмите здесь, чтобы выбрать первое приложение.</string>
+    <string name="add_second_app">Нажмите здесь, чтобы выбрать второе приложение.</string>
+
+    <string name="choosing_an_app">Выбор приложения</string>
+    <string name="scanning_installed_apps">Сканирование установленных приложений</string>
+    <string name="creating_a_preset">Создание пресета</string>
+    <string name="editing_a_preset">Изменение пресета</string>
+    <string name="runs_on_app_startup">Запуск при старте приложения</string>
+    <string name="interface_size">Размер интерфейса</string>
+    <string name="ui_scale_factor">Коэффициент увеличения масштаба интерфейса</string>
+    <string name="enable_dev_mode_guid">Для активации \"Freeform Mode\" включите режим разработчика. Перейдите в раздел «О телефоне», найдите «Номер сборки», нажмите на него 7 раз — появится сообщение, что режим разработчика активирован.</string>
+    <string name="enable_dev_mode_car_guid">Для активации \"Freeform Mode\" включите настройки разработчика. Для этого вам необходимо отправить команду: \"adb shell settings put global development_settings_enabled 1\"</string>
+    <string name="about_phone">О телефоне</string>
+    <string name="gsplit_preset">GSplit пресет</string>
+    <string name="select_an_preset">Выберите пресет</string>
+
+    <string name="system_bar_compensator_title">Компенсация системных панелей</string>
+    <string name="system_bar_compensator_desc">Добавляет отступы отображения окон с учётом \"Status Bar\" и \"Navigation Bar\". Переключите, если нижнее окно выходит за нижние границы экрана</string>
+
+    <string name="minimize_by_run_title">Сворачивать после запуска пресета по нажатию</string>
+    <string name="minimize_by_autorun_title">Сворачивать после автозапуска пресета</string>
+    <string name="minimize_by_autorun_desc">Сворачивать приложение, чтобы оно не показывалось за открытыми окнами</string>
+
+    <string name="top_panel_indentation_title">Отступ верхней панели</string>
+    <string name="top_panel_indentation_desc">Дополнительный отступ, предотвращающий просвечивание интерфейса приложения под прозрачной строкой заголовка. Также сдвигает положение кнопки \"Назад\" на экране \"Тёмный фон\".</string>
+
+    <string name="bottom_window_shift_size_title">Размер сдвига нижнего окна</string>
+    <string name="bottom_window_shift_size_desc">Размер в пикселях, определяющий, на сколько нижнее окно сплита будет перекрывать верхнее окно при включённой опции \"Сдвиг окна\".</string>
+
+    <string name="context_adaptive_window_title">Контекстно-адаптивный расчёт размеров окон</string>
+    <string name="context_adaptive_window_desc">Использует современные API при их поддержке на устройстве. Умеет учитывать вырезы экранов и динамические отступы. Однако на старых версиях Android может некорректно рассчитывать размеры</string>
+
+    <string name="autostart_minimize_delay_title">Задержка сворачивания после автозапуска пресета</string>
+    <string name="autostart_minimize_delay_desc">Включите, если окна некорректно стартуют после автозапуска или видно анимацию сворачивания при старте. В основном может потребоваться для Android 12 и выше</string>
+
+    <string name="exp_native_split_title">Экспериментальная нативная реализация разделения</string>
+    <string name="exp_native_split_desc">Запуск разделения через Accessibility API. Совместимо с Android 9 и выше. В автомобильных прошивках некоторые необходимые сервисы для запуска могут быть недоступны.</string>
+
+    <string name="autoplay">Автостарт воспроизведения</string>
+    <string name="autoplay_s">Автовоспроизведение</string>
+    <string name="autoplay_desc">Время между запуском приложения и отправкой ему события «воспроизведение». Увеличьте это значение, если приложение не успевает открыться за отведённый интервал.</string>
+    <string name="main_list_empty">Нажмите «+» чтобы добавить новые пресеты</string>
+    <string name="scheduler_list_empty">Нажмите «+» чтобы запланировать запуск приложения</string>
+    <string name="add_quick_access_app">Нажмите «+» чтобы добавить приложение быстрого доступа</string>
+
+    <string name="soft_kill_app_title">Мягкая остановка приложений перед запуском в окнах</string>
+    <string name="soft_kill_app_desc">Попытка остановить работающие приложения стандартными средствами Android. Остановка не произойдет, если приложение используется на переднем плане или имеет высокий приоритет в системе. Может помочь корректно пересоздать интерфейс ранее запущеного приложения.</string>
+
+    <string name="autostart">Автозагрузка</string>
+
+    <string name="self_autostart_title">Запуск при включении устройства</string>
+    <string name="self_autostart_desc">Автоматически запускает GSplit после загрузки системы.</string>
+
+    <string name="self_autostart_in_bg_title">Запуск в фоновом режиме</string>
+    <string name="self_autostart_in_bg_desc">Запускает выбранный для автозапуска пресет без отображения интерфейса приложения. Если пресет для автозапуска не выбран, сплит не запустится, но планировщик задач отработает.</string>
+
+    <string name="self_autostart_by_connect_title">Запуск после подключения к интернету</string>
+    <string name="self_autostart_by_connect_desc">Приложение дождется установления интернет-соединения и только затем запустит выбранный для автозапуска пресет.</string>
+
+    <string name="self_autostart_delay_title">Пауза автозагрузки приложения</string>
+    <string name="self_autostart_delay_desc">Запуск GSplit при включении устройства имеет высокий приоритет загрузки. Добавьте задержку, если хотите отложить запуск, чтобы дать другим приложениям загрузиться первыми.</string>
+
+    <string name="launch_scheduler_title">Планировщик запуска</string>
+    <string name="launch_scheduler_desc">Запланировать запуск других приложений до или после автозагрузки сплита, выполняемой после включения устройства.</string>
+
+    <string name="height_corrector_title">Корректировка высоты окон</string>
+    <string name="height_corrector_desc">Если на вашем устройстве некорректно отображается высота окна, вы можете исправить её с помощью этого параметра. Работает только при включённой опции «Компенсация системных панелей».</string>
+
+    <string name="ym_compat_title">Открытие экрана с обложкой в Yandex Music</string>
+    <string name="ym_compat_desc">Запускает Yandex Music в режиме совместимости. Функция «Автостарт воспроизведения» разворачивает экран с обложкой трека и продолжает воспроизведение последнего источника. Не работает с последними версиями Yandex Music.</string>
+    <string name="murglar_compat_title">Открытие экрана с обложкой в Murglar</string>
+    <string name="murglar_compat_desc">Запускает Murglar в режиме совместимости. Функция «Автостарт воспроизведения» разворачивает экран с обложкой трека и продолжает воспроизведение последнего источника.</string>
+    <string name="vkx_compat_title">Открытие экрана с обложкой в VKX</string>
+    <string name="vkx_compat_desc">Запускает VKX в режиме совместимости. Функция «Автостарт воспроизведения» разворачивает экран с обложкой трека и продолжает воспроизведение последнего источника.</string>
+
+    <string name="general">Общее</string>
+    <string name="launching_presets">Запуск пресетов</string>
+    <string name="startup_conditions">Условия запуска</string>
+    <string name="ui">Интерфейс</string>
+    <string name="additional_features">Доп. функции</string>
+
+    <string name="yes">Да</string>
+    <string name="no">Нет</string>
+    <string name="edit">Изменить</string>
+
+    <string name="turn_on_auto_launch">Включить автозапуск</string>
+    <string name="schedule_a_launch">Запланировать запуск</string>
+    <string name="time_after_autostart">через</string>
+    <string name="time_before_autostart">за</string>
+    <string name="launch_direction">Порядок запуска</string>
+    <string name="before_split">Перед сплитом</string>
+    <string name="after_split">После сплита</string>
+
+    <string name="enable_shift">Включить сдвиг окна</string>
+    <string name="disable_shift">Выключить сдвиг окна</string>
+
+    <string name="deleting_a_preset">Удаление</string>
+    <string name="deleting_a_preset_confirm">Вы действительно хотите удалить этот пресет?</string>
+    <string name="deleting_a_autorun_confirm">Вы действительно хотите удалить этот автозапуск?</string>
+    <string name="deleting_a_quick_app_confirm">Вы действительно хотите удалить это приложение быстрого доступа?</string>
+
+    <string name="waiting_for_split_auto_start">Ожидание автозапуска сплита</string>
+    <string name="preset_autorun_channel">Канал автозапуска пресетов</string>
+    <string name="preset_autorun_channel_desc">Канал, через который обеспечивается запуск пресетов при запуске устройства</string>
+
+    <string name="enable_AccessibilityService_step_one">Чтобы гарантировать запуск при старте системы, приложению необходимо предоставить спец. возможности. Перейдите в настройки, найдите приложение в списке и включите \"Использовать GSplit\".</string>
+    <string name="enable_AccessibilityService_step_two">Включите контроль спец. возможностей в MacroDroid. Для этого откройте MacroDroid -> Настройки -> Контроль спец. возможностей, и включите для GSplit.</string>
+
+    <string name="settings">Настройки</string>
+    <string name="general_behavior">Общее поведение</string>
+    <string name="other">Другое</string>
+
+    <string name="modes">Режимы</string>
+    <string name="window_shift">Сдвиг окна</string>
+    <string name="dark_background">Тёмный фон</string>
+
+    <string name="overlay">Оверлей</string>
+    <string name="overlay_notification_description">Отображение оверлея для взаимодействия с окнами сплита</string>
+
+    <string name="split_close">Закрытие сплита</string>
+    <string name="split_close_description">Плавающая кнопка для закрытия открытых окон одним нажатием</string>
+    <string name="app_switch">Переключение приложений</string>
+    <string name="app_switch_description">Быстрое переключение приложений открытых в сплите</string>
+
+    <string name="hide_lower_system_bar">Убирает верхнюю системную панель нижнего окна путём наложения одного окна на другое</string>
+    <string name="dark_background_split">Отображает тёмный фон под открытыми окнами сплита</string>
+
+    <string name="interface_display_settings">Внутренние настройки отображения интерфейса</string>
+    <string name="freeform_window_settings">Параметры связанные с запуском окон в freeform режиме, настройки таймингов и общее поведение</string>
+    <string name="auto_start_presets">Автоматический старт пресетов при запуске устройства и дополнительный планировщик запуска</string>
+    <string name="quick_android_settings">Быстрый переход в системные настройки</string>
+
+    <string name="launch_with_tasks">Запуск с задачами</string>
+    <string name="send_additional_actions">Отправка дополнительных действий после открытия приложений в сплите</string>
+
+    <string name="automation">Автоматизация</string>
+    <string name="keep_focus">Удержание фокуса</string>
+    <string name="keep_focus_desc">Если первое окно теряет фокус, фокус автоматически возвращается, гарантируя, что первое окно всегда отображается над вторым</string>
+    <string name="auto_close">Автоматическое закрытие</string>
+    <string name="auto_close_desc">Тёмный экран отображается, пока на экране есть хотя бы одно окно из сплита, и автоматически исчезает после их закрытия</string>
+    <string name="music_aggregators">Агрегаторы музыки</string>
+
+    <string name="appearance">Внешний вид</string>
+    <string name="size">Размер</string>
+    <string name="background_transparency">Прозрачность фона</string>
+    <string name="icon_transparency">Прозрачность иконки</string>
+    <string name="enable_overlay">Включить оверлей</string>
+    <string name="overlay_button_close_desc">Отображать на экране кнопку-оверлей для быстрого закрытия сплита</string>
+    <string name="overlay_replace_button_desc">Отображать на экране кнопку-оверлей для быстрой смены окон</string>
+    <string name="window_shift_before_closing">Сдвиг окон перед закрытием</string>
+    <string name="window_shift_desc">Если в вашей системе есть системные жесты \"назад\" от краёв экрана</string>
+    <string name="sequential_closing">Последовательное закрытие</string>
+    <string name="sequential_closing_desc">Второе окно начнёт закрываться только после того как первое окно полностью закроется</string>
+    <string name="reset_position">Сбросить позицию</string>
+    <string name="reset_position_desc">Возвращает оверлей в стартовую позицию, если потеряли его где-то на экране</string>
+    <string name="window_closing_pause">Пауза между закрытием окон</string>
+    <string name="window_closing_pause_desc">Ручной тайминг между закрытием окон, при выключенном параметре \"Последовательное закрытие\". Чем медленнее - тем стабильнее и надёжнее.</string>
+    <string name="position_reset">Позиция сброшена</string>
+    <string name="back_button">Кнопка назад</string>
+    <string name="back_button_display">Отображать кнопку \"назад\" на экране с тёмным фоном</string>
+    <string name="preview">Предпросмотр</string>
+    <string name="quick_launch_apps">Приложения быстрого доступа</string>
+    <string name="quick_launch_apps_desc">Настройка набора приложений и их параметров для быстрой замены с помощью кнопки-оверлея</string>
+    <string name="available_in">доступно в</string>
+    <string name="top_window">Верхнее окно</string>
+    <string name="bottom_window">Нижнее окно</string>
+    <string name="left_window">Левое окно</string>
+    <string name="right_window">Правое окно</string>
+    <string name="add_app">Добавить приложение</string>
+    <string name="adding_app">Добавление приложения</string>
+    <string name="overlay_size">Размер оверлея</string>
+    <string name="window_size">Размер окна быстрого запуска</string>
+    <string name="add_quick_access_apps">Добавьте приложения быстрого доступа</string>
+    <string name="opened_in_adjacent_window">Открыто в соседнем окне</string>
+    <string name="enable_quick_access">Включить быстрый доступ</string>
+    <string name="disable_quick_access">Выключить быстрый доступ</string>
+    <string name="presets">Пресеты</string>
+    <string name="manage_presets_and_windows">Управление пресетами и окнами из других приложений</string>
+    <string name="send_events_to_macrodroid">Отправлять события</string>
+    <string name="send_events_to_macrodroid_desc">Отправляет данные о текущем состоянии сплита и открытых окон, позволяя другим приложениям определять, активен ли сплит и какие окна открыты.</string>
+    <string name="synchronization">Синхронизация</string>
+    <string name="accessibility_permission_prompt">Для активации функции приложению требуется предоставить спец. возможности. Перейдите в настройки, найдите приложение в списке и включите «Использовать GSplit».</string>
+    <string name="enable">Включить</string>
+
+    <string name="telegram_not_installed">Telegram не установлен</string>
+    <string name="sec">сек</string>
+    <string name="multi_window_preparation">Подготовка мультиоконности</string>
+    <string name="multi_window_prep_guide">Если окна не запускаются или открывается только второе окно, установите дополнительную задержку для подготовки многооконного режима.</string>
+    <string name="cross_launch_preparation">Пауза между запусками окон</string>
+    <string name="cross_launch_prep_guide">Если второе окно не запускается или запускается некорректно, установите дополнительную задержку между запусками приложений.</string>
+    <string name="instead_of_split">Вместо сплита</string>
+
+    <string name="quick_launch_window">Окно быстрого запуска</string>
+    <string name="app_names">Названия приложений</string>
+    <string name="display_app_names">Отображать названия приложений под иконками</string>
+    <string name="action_overlay_pin">Закрепить</string>
+    <string name="action_overlay_pin_description">Запрещает перетаскивать оверлей по экрану</string>
+
+    <string name="standby_mode">Режим ожидания</string>
+    <string name="standby_mode_description">Если вы переключитесь на полноэкранное приложение из режима разделённого экрана, через некоторое время сервис обнаружения окон на экране перейдёт в режим ожидания. При возвращении в разделённый экран оверлеи не отобразятся, а тёмный экран не закроется автоматически. Сервис возобновит работу, когда вы запустите новый сплит.</string>
+    <string name="confirm_reset_overlay_position">Вы действительно хотите сбросить позицию оверлея?</string>
+    <string name="app_names_for_windows">Названия приложений для окон</string>
+    <string name="app_names_for_presets">Названия приложений для пресетов</string>
+    <string name="last_launched">Последний запущенный</string>
+    <string name="last_launched_split">Последний запущенный сплит</string>
+    <string name="launch_history">История запусков</string>
+    <string name="show_last_launched_split">Отображать последний запущенный сплит</string>
+    <string name="display_last_launched_split">Отображать последнюю запущенную конфигурацию сплита в списке пресетов на главном экране</string>
+    <string name="contrast_border">Контрастная рамка</string>
+    <string name="contrast_border_desc">Более заметная рамка вокруг элемента последнего запущенного сплита</string>
+
+    <string name="adb_features">ADB</string>
+    <string name="adb_features_description">Параметры связанные с исполнением вспомогательных ADB команд</string>
+    <string name="adb_helper">ADB-помощник</string>
+    <string name="adb_helper_description">Разблокирует функции связанные с выполнением ADB команд</string>
+    <string name="force_kill_app_title">Принудительная остановка приложений перед запуском в окнах</string>
+    <string name="force_kill_app_desc">Останавливать работающие приложения через ADB-команду. Закрывает приложения, если они были ранее открыты в полноэкранном режиме. Гарантированный запуск окон сплита.</string>
+    <string name="connection_port">Порт подключения</string>
+    <string name="connected">Подключено</string>
+    <string name="connecting">Подключение…</string>
+    <string name="disconnected">Отключено</string>
+    <string name="error">Ошибка</string>
+    <string name="configuration">Конфигурация</string>
+    <string name="your_car">Модель</string>
+    <string name="do_not_use">Не использовать</string>
+    <string name="adb_overlay_features">Функции оверлеев через ADB</string>
+    <string name="adb_overlay_features_desc">Прямое закрытие окон сплита через оверлей закрытия. Прямое переключение приложений через оверлей быстрой замены окон. Более быстрый, надежный, и простой способ работы функций оверлеев.</string>
+    <string name="connection">Подключение</string>
+    <string name="direct_window_control">Прямое управление окнами</string>
+    <string name="new_version_available">Доступна новая версия</string>
+    <string name="details">Подробнее</string>
+    <string name="download">Скачать</string>
+    <string name="data_fetch_failed">Не удалось получить данные. Проверьте интернет</string>
+    <string name="off">Выкл.</string>
+    <string name="enter_your_port">Введите свой номер порта</string>
+
+    <string name="about_text"><![CDATA[<strong>Контакты:</strong><br>email: <a href="#email">%1$s</a>&#10240;<br>tg: <a href="#tg">%2$s</a>&#10240;]]></string>
+    <string name="api_text"><![CDATA[<strong>Получение текущего состояния сплита</strong>
+<br>
+В MacroDroid: Триггеры -> Интент получен
+<br>
+<strong>Действие 1</strong>: \"com.salat.gsplit.INIT_SPLIT\" - перед запуском окон
+<br>
+<strong>Действие 2</strong>: \"com.salat.gsplit.SPLIT_STATE\" - состояния запуска окон
+<br>
+<br>
+<strong>Дополнение 1</strong>: \"is_active\" -> значение \"*\" -> выбираете переменную, в которую будет записываться значение.
+<br>
+Принимает значение \"1\", когда на переднем плане отображается хотя бы одно окно, и значение \"0\", когда на переднем плане окон нет.
+<br>
+<br>
+<strong>Дополнение 2</strong>: \"first_window\" -> значение \"*\" -> выбираете переменную, в которую будет записываться значение.
+<br>
+Принимает значение имени пакета первого окна (верхнего), когда окно активно; когда окна нет — пустая строка.
+<br>
+<br>
+<strong>Дополнение 3</strong>: \"second_window\" -> значение \"*\" -> выбираете переменную, в которую будет записываться значение.
+<br>
+Принимает значение имени пакета второго окна (нижнего), когда окно активно; когда окна нет — пустая строка.
+<br>
+<br>
+Далее в своих скриптах можно отслеживать эти переменные и распознавать текущее состояние сплита.]]></string>
+    <string name="api_text2"><![CDATA[<strong>Запуск пресетов через ярлыки:</strong>
+<br>
+Отправьте intent \"com.salat.gsplit.PresetLauncherActivity\" и передайте параметр \"id\" с идентификатором пресета, который вы хотите запустить.
+<br>
+<br>
+<strong>Запуск из MacroDroid:</strong>
+<br>
+Действия -> Запустить ярлык -> GSplit пресет.]]></string>
+    <string name="api_text3"><![CDATA[<strong>Управление сплитами</strong>
+<br>
+Отправить Broadcast -> package = \"com.salat.gsplit\" -> Нужное действие с параметрами:
+<br>
+<br>
+<strong>Действие 1</strong>: \"com.salat.gsplit.CLOSE_SPLIT\"
+<br>
+Закрывает текущий открытый сплит.
+<br>
+<br>
+<strong>Действие 2</strong>: \"com.salat.gsplit.REPLACE_WINDOW\"
+<br>
+Параметры: target:[first|second], package, auto_play:[0|1]
+<br>
+Заменяет текущее окно открытого сплита на приложение с именем пакета package.
+<br>
+<br>
+<strong>Действие 3</strong>: \"com.salat.gsplit.LAUNCH\"
+<br>
+Параметры: id
+<br>
+Запускает пресет по id. Закрывает текущий сплит, если он открыт.
+<br>
+<br>
+<strong>Действие 4</strong>: \"com.salat.gsplit.LAUNCH_LAST\"
+<br>
+Запускает последнюю открытую конфигурацию сплита. Перезапускает текущий сплит, если он открыт.
+<br>
+<br>
+<strong>Действие 5</strong>: \"com.salat.gsplit.LAUNCH_AUTOSTART\"
+<br>
+Принудительный запуск сплита выбранного для автозапуска
+<br>
+<br>
+<strong>Действие 6</strong>: \"com.salat.gsplit.CUSTOM_LAUNCH\"
+<br>
+Параметры: first_package, second_package, first_auto_play:[0|1], second_auto_play:[0|1], type:[1x1|2x1|…], dark_background:[0|1], window_shift:[0|1]
+<br>
+Запускает сплит по указанной конфигурации.]]></string>
+</resources>
