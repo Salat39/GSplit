@@ -3,6 +3,7 @@ package com.salat.gsplit.presentation
 import android.content.Intent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.salat.filedownloader.domain.usecases.GetSettingsFromFileUseCase
 import com.salat.firebase.domain.useCases.LogLaunchTypeUseCase
 import com.salat.firebase.domain.useCases.LogScreenUseCase
 import com.salat.gsplit.presentation.components.toAnalyticsRoute
@@ -12,6 +13,7 @@ import com.salat.preferences.domain.entity.BoolPref
 import com.salat.preferences.domain.entity.BoolSharedPref
 import com.salat.preferences.domain.entity.FloatPref
 import com.salat.preferences.domain.entity.IntPref
+import com.salat.preferences.domain.usecases.ApplySettingsBackupUseCase
 import com.salat.preferences.domain.usecases.FlowPrefsUseCase
 import com.salat.preferences.domain.usecases.LoadBoolPrefUseCase
 import com.salat.preferences.domain.usecases.LoadBoolSharedPrefUseCase
@@ -22,6 +24,8 @@ import com.salat.splitlauncher.domain.usecases.GetNativeSplitLaunchTaskFlowUseCa
 import com.salat.splitlauncher.domain.usecases.GetSplitStartedFlowUseCase
 import com.salat.splitlauncher.domain.usecases.LaunchSplitUseCase
 import com.salat.splitpresets.domain.usecases.GetAutoPlayPresetUseCase
+import com.salat.statekeeper.domain.usecases.CheckAccessibilityServiceEnabledUseCase
+import com.salat.statekeeper.domain.usecases.GetImportSettingsRequestUseCase
 import com.salat.statekeeper.domain.usecases.GetSkipAutoLaunchUseCase
 import com.salat.statekeeper.domain.usecases.SetSkipAutoLaunchUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -54,7 +58,11 @@ class MainViewModel @Inject constructor(
     private val setSkipAutoLaunchUseCase: SetSkipAutoLaunchUseCase,
     private val logScreenUseCase: LogScreenUseCase,
     private val logLaunchTypeUseCase: LogLaunchTypeUseCase,
-    private val launchSplitUseCase: LaunchSplitUseCase
+    private val launchSplitUseCase: LaunchSplitUseCase,
+    private val getSettingsFromFileUseCase: GetSettingsFromFileUseCase,
+    private val getImportSettingsRequestUseCase: GetImportSettingsRequestUseCase,
+    private val checkAccessibilityServiceEnabledUseCase: CheckAccessibilityServiceEnabledUseCase,
+    private val applySettingsBackupUseCase: ApplySettingsBackupUseCase
 ) : ViewModel() {
     private val _splashScreenState = MutableStateFlow(true)
     val splashScreenState = _splashScreenState.asStateFlow()
@@ -77,6 +85,15 @@ class MainViewModel @Inject constructor(
     private val _minimizeApp = Channel<Unit>()
     val minimizeApp = _minimizeApp.receiveAsFlow()
 
+    private val _importSettingsTask = Channel<Unit>()
+    val importSettingsTask = _importSettingsTask.receiveAsFlow()
+
+    private val _importSettingsData = MutableStateFlow<String?>(null)
+    val importSettingsData = _importSettingsData.asStateFlow()
+
+    private val _canAccessibility = MutableStateFlow(false)
+    val canAccessibility = _canAccessibility.asStateFlow()
+
     private val _uiScaleState = MutableStateFlow(1f)
     val uiScaleState = _uiScaleState.asStateFlow()
 
@@ -95,6 +112,10 @@ class MainViewModel @Inject constructor(
             collectFreedomHack()
 
             collectNativeSplitLaunchTask()
+
+            collectImportSettingsTask()
+
+            collectAccessibilityServiceStatus()
 
             val autoStartMinimizeDelay = loadBoolPrefUseCase.execute(BoolPref.AutoStartMinimizeDelay)
             collectSplitStartedEvent(autoStartMinimizeDelay)
@@ -162,6 +183,14 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    private fun CoroutineScope.collectImportSettingsTask() = launch {
+        getImportSettingsRequestUseCase.flow.collect { _importSettingsTask.send(Unit) }
+    }
+
+    private fun CoroutineScope.collectAccessibilityServiceStatus() = launch {
+        checkAccessibilityServiceEnabledUseCase.flow.collect { _canAccessibility.emit(it) }
+    }
+
     private fun CoroutineScope.collectDarkScreen() = launch {
         getDarkBackgroundFlowUseCase.execute().collect { minimizeAfterCloseScreen ->
             if (_launchDarkScreenState.value != minimizeAfterCloseScreen) {
@@ -196,6 +225,21 @@ class MainViewModel @Inject constructor(
                 else -> Unit
             }
         }
+    }
+
+    fun getSettingsFromFile(stringUri: String) = viewModelScope.launch(Dispatchers.IO) {
+        val settings = getSettingsFromFileUseCase.execute(stringUri)
+        if (settings.isNotBlank()) _importSettingsData.emit(settings)
+    }
+
+    fun resetImportData() = viewModelScope.launch(Dispatchers.IO) {
+        _importSettingsData.emit(null)
+    }
+
+    fun applyImportSettingsData() = viewModelScope.launch(Dispatchers.IO) {
+        val importData = _importSettingsData.value
+        importData?.let { applySettingsBackupUseCase.execute(it) }
+        resetImportData()
     }
 
     fun clearLaunchDarkScreenState() {

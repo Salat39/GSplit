@@ -3,6 +3,8 @@ package com.salat.adb.data.repository
 import android.util.Base64
 import com.salat.adb.BuildConfig
 import com.salat.adb.data.entity.AdbConnectionState
+import com.salat.adb.data.entity.AdbRecentTaskInfo
+import com.salat.adb.data.entity.TELNET_HELPER_PORT
 import com.salat.adb.domain.repository.AdbRepository
 import com.salat.preferences.domain.DataStoreRepository
 import com.salat.preferences.domain.entity.BoolPref
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -60,8 +63,10 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
     private var connectionEpoch: Long = 0L
 
     private val base64 = AdbBase64 { data -> Base64.encodeToString(data, Base64.NO_WRAP) }
+    private val telnetDiscovery by lazy { TelnetShellDiscovery(::buildDoneMarker) }
 
-    private val _connectionState = MutableStateFlow<AdbConnectionState>(AdbConnectionState.Disconnected)
+    private val _connectionState =
+        MutableStateFlow<AdbConnectionState>(AdbConnectionState.Disconnected)
     override val connectionState: StateFlow<AdbConnectionState> = _connectionState.asStateFlow()
 
     @Volatile
@@ -70,10 +75,31 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
     @Volatile
     private var connection: AdbConnection? = null
 
+    @Volatile
+    private var telnetTransport: TelnetShellTransport? = null
+
     private val taskIdRegex = Regex(
         pattern = """\bTask\{[^}]*#(\d+)\b""",
         options = setOf(RegexOption.MULTILINE)
     )
+
+    private val foregroundPackageRegex = Regex(
+        pattern = """\b([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+)(?=(?:/|\s|\}|,|\)|\]|$))"""
+    )
+
+    // Recents tasks
+    private val taskHeaderRegex = Regex("""^\s{2}\*\sTask\{.*#(\d+).*?\btype=([a-zA-Z_]+)\b.*""")
+    private val taskHeaderVisibleRegex = Regex("""\bvisible=(true|false)\b""")
+    private val taskHeaderVisibleRequestedRegex = Regex("""\bvisibleRequested=(true|false)\b""")
+    private val taskHeaderPackageFromARegex =
+        Regex("""\bA=\d+:([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+)\b""")
+    private val packageNameLineRegex =
+        Regex("""\bpackageName=([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+)\b""")
+    private val activityStateRegex = Regex("""\bstate=([A-Z_]+)\b""")
+    private val nowVisibleRegex = Regex("""\bnowVisible=(true|false)\b""")
+    private val lastVisibleTimeRegex = Regex("""\blastVisibleTime=([^\s]+)\b""")
+    private val baseDirRegex = Regex("""\bbaseDir=([^\s]+)\b""")
+    private val dataDirRegex = Regex("""\bdataDir=([^\s]+)\b""")
 
     init {
         // Drop connection when external toggle becomes OFF.
@@ -88,9 +114,9 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
             launch {
                 dataStore.getIntPrefFlow(IntPref.AdbHelperPort).drop(1).collect { _ ->
                     disconnect()
-                    if (dataStore.load(BoolPref.EnableAdbHelper)) {
-                        reconnect()
-                    }
+                    val enable =
+                        dataStore.getBooleanPrefFlow(BoolPref.EnableAdbHelper).first()
+                    if (enable) reconnect()
                 }
             }
         }
@@ -99,14 +125,16 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
     /**
      * Connects to adbd at host:port with ephemeral RSA keys; idempotent.
      */
-    suspend fun connect(host: String, port: Int): Boolean = withContext(Dispatchers.IO) {
+    suspend fun connect(host: String, port: Int) = if (isTelnetMode(port)) connectTelnet() else connectAdb(host, port)
+
+    private suspend fun connectAdb(host: String, port: Int): Boolean = withContext(Dispatchers.IO) {
         lock.withLock {
             // Snapshot epoch to prevent resurrecting connection after disconnect().
             val myEpoch = synchronized(connGuard) { connectionEpoch }
 
             isManuallyDisconnected = false
 
-            if (isConnectedUnsafe()) {
+            if (isAdbConnectedUnsafe()) {
                 _connectionState.value = AdbConnectionState.Connected
                 Timber.d("[ADB] connect skipped: already connected")
                 cancelReconnectLoop()
@@ -142,8 +170,11 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
                         _connectionState.value = AdbConnectionState.Disconnected
                         return@withLock false
                     }
+                    val oldTelnet = telnetTransport
                     socket = s
                     connection = conn
+                    telnetTransport = null
+                    runCatching { oldTelnet?.close() }
                 }
 
                 _connectionState.value = AdbConnectionState.Connected
@@ -171,8 +202,8 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
             _connectionState.value = AdbConnectionState.Connecting
         }
 
-        val port = dataStore.load(IntPref.AdbHelperPort)
-        if (!isConnectedUnsafe()) {
+        val port = dataStore.getIntPrefFlow(IntPref.AdbHelperPort).first()
+        if (!isConnectedForPortUnsafe(port)) {
             val ok = connect(host, port)
             if (!ok) {
                 scheduleReconnect(host, port, "initial reconnect")
@@ -186,7 +217,10 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
     private suspend fun scheduleReconnect(host: String, port: Int, reason: String) {
         // If the user explicitly disconnected, do not auto-reconnect and reset retry budget.
         if (isManuallyDisconnected || _connectionState.value is AdbConnectionState.Disconnected) {
-            Timber.d("[ADB] reconnect suppressed: manual disconnect/state disconnected (%s)", reason)
+            Timber.d(
+                "[ADB] reconnect suppressed: manual disconnect/state disconnected (%s)",
+                reason
+            )
             cancelReconnectLoop()
             return
         }
@@ -202,11 +236,12 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
                         // Disconnect must reset attempts and stop the loop.
                         break
                     }
-                    if (!dataStore.load(BoolPref.EnableAdbHelper)) {
+                    val enable = dataStore.getBooleanPrefFlow(BoolPref.EnableAdbHelper).first()
+                    if (!enable) {
                         disconnect()
                         break
                     }
-                    if (isConnectedUnsafe()) {
+                    if (isConnectedForPortUnsafe(port)) {
                         break
                     }
 
@@ -236,7 +271,8 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
      * Executes "shell:<command>" with lazy connect and background reconnect on failure.
      */
     override suspend fun execute(command: String): String = withContext(Dispatchers.IO) {
-        if (!dataStore.load(BoolPref.EnableAdbHelper)) {
+        val enable = dataStore.getBooleanPrefFlow(BoolPref.EnableAdbHelper).first()
+        if (!enable) {
             disconnect()
             return@withContext "ADB helper disabled"
         }
@@ -246,9 +282,9 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
             return@withContext "ADB disconnected"
         }
 
-        val port = dataStore.load(IntPref.AdbHelperPort)
+        val port = dataStore.getIntPrefFlow(IntPref.AdbHelperPort).first()
 
-        if (!isConnectedUnsafe()) {
+        if (!isConnectedForPortUnsafe(port)) {
             val ok = connect(host, port)
             if (!ok) return@withContext "ADB connect failed"
         }
@@ -256,10 +292,15 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
         if (command.isEmpty()) return@withContext "empty command"
 
         try {
-            executeLocked(command)
+            if (isTelnetMode(port)) executeTelnetLocked(command) else executeLocked(command)
         } catch (t: CommandFailedException) {
             // Command-level failure: connection is alive (marker reached), no reconnect required.
-            Timber.w(t, "[ADB] command failed (exit=%d), output=%s", t.exitCode, t.output.trim().takeLast(300))
+            Timber.w(
+                t,
+                "[ADB] command failed (exit=%d), output=%s",
+                t.exitCode,
+                t.output.trim().takeLast(300)
+            )
             t.message ?: "ADB command failed"
         } catch (t: Throwable) {
             // If disconnected intentionally, do not attempt any background reconnects.
@@ -287,6 +328,20 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
                 "grep -i -E \"WindowingMode|mWindowingMode|windowingMode|$pkg\""
         )
         return r.contains("mode=freeform ")
+    }
+
+    override suspend fun isAppLaunched(packageName: String): Boolean {
+        val pkg = packageName.trim()
+        if (pkg.isEmpty() || pkg.equals("unknown", ignoreCase = true) || !isValidPackageName(pkg)) {
+            return false
+        }
+
+        val result = execute("pidof $pkg 2>/dev/null || true").trim()
+        if (result.isEmpty()) return false
+
+        return result.split(' ', '\n', '\r', '\t').any { pid ->
+            pid.toIntOrNull()?.let { it > 0 } == true
+        }
     }
 
     override suspend fun getTaskId(packageName: String): Int? {
@@ -333,9 +388,259 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
         return execute(sb.toString())
     }
 
+    override suspend fun enablePackage(packageName: String): String {
+        val pkg = packageName.trim()
+        if (pkg.isEmpty() || pkg.equals("unknown", ignoreCase = true) || !isValidPackageName(pkg)) {
+            return "no valid package names"
+        }
+        return execute("pm enable $pkg")
+    }
+
+    override suspend fun allowActivateVpnAppOp(packageName: String): String {
+        val pkg = packageName.trim()
+        if (pkg.isEmpty() || pkg.equals("unknown", ignoreCase = true) || !isValidPackageName(pkg)) {
+            return "no valid package names"
+        }
+        return execute("appops set $pkg ACTIVATE_VPN allow")
+    }
+
+    override suspend fun enableAndLaunchApp(packageName: String, launchActivity: String?): String {
+        val pkg = packageName.trim()
+        if (pkg.isEmpty() || pkg.equals("unknown", ignoreCase = true) || !isValidPackageName(pkg)) {
+            return "no valid package names"
+        }
+        val enableOut = enablePackage(pkg)
+        val trimmedActivity = launchActivity?.trim()?.takeUnless { it.isEmpty() }
+        val launchCmd = if (trimmedActivity != null) {
+            val fqcn = if (trimmedActivity.startsWith(".")) {
+                pkg + trimmedActivity
+            } else {
+                trimmedActivity
+            }
+            "am start --user 0 -n $pkg/$fqcn"
+        } else {
+            "monkey -p $pkg -c android.intent.category.LAUNCHER 1"
+        }
+        val launchOut = execute(launchCmd)
+        return "$enableOut\n$launchOut"
+    }
+
+    override suspend fun disableUserPackage(packageName: String): String {
+        val pkg = packageName.trim()
+        if (pkg.isEmpty() || pkg.equals("unknown", ignoreCase = true) || !isValidPackageName(pkg)) {
+            return "no valid package names"
+        }
+        return execute("pm disable-user --user 0 $pkg")
+    }
+
     override suspend fun minimize(taskId: Int) {
         if (taskId == -1 || taskId == 0) return
         execute("am stack remove $taskId")
+    }
+
+    @Suppress("ReturnCount")
+    override suspend fun getForegroundAppPackageName(): String? {
+        val windowDump = execute("dumpsys window windows")
+        if (windowDump.isNotBlank()) {
+            sequenceOf("mFocusedApp=", "mCurrentFocus=")
+                .mapNotNull { marker -> extractPackageAroundMarker(windowDump, marker) }
+                .firstOrNull { pkg -> !isSystemOverlayPackage(pkg) && isValidPackageName(pkg) }
+                ?.let { return it }
+        }
+
+        val activityDump = execute("dumpsys activity activities")
+        if (activityDump.isBlank()) return null
+
+        val resumedLine = activityDump.lineSequence().firstOrNull { line ->
+            line.contains("topResumedActivity") ||
+                line.contains("mTopResumedActivity") ||
+                line.contains("mResumedActivity") ||
+                line.contains("ResumedActivity")
+        } ?: return null
+
+        val match = foregroundPackageRegex.find(resumedLine) ?: return null
+        val pkg = match.groupValues[1]
+        return pkg.takeIf { it.isNotBlank() && !isSystemOverlayPackage(it) && isValidPackageName(it) }
+    }
+
+    private fun extractPackageAroundMarker(dump: String, marker: String): String? {
+        val idx = dump.indexOf(marker)
+        if (idx < 0) return null
+
+        val endExclusive = (idx + 600).coerceAtMost(dump.length)
+        val chunk = dump.substring(idx, endExclusive)
+
+        val match = foregroundPackageRegex.find(chunk) ?: return null
+        return match.groupValues[1].trim()
+    }
+
+    private fun isSystemOverlayPackage(pkg: String): Boolean {
+        return pkg == "com.android.systemui" ||
+            pkg == "android" ||
+            pkg.startsWith("com.android.launcher") ||
+            pkg.startsWith("com.google.android.apps.nexuslauncher")
+    }
+
+    override suspend fun getRecentTasksFromActivitiesDump(): List<AdbRecentTaskInfo> {
+        val dump = execute("dumpsys activity activities")
+        if (dump.isBlank()) return emptyList()
+        return parseRecentTasksFromActivitiesDump(dump)
+    }
+
+    private fun parseRecentTasksFromActivitiesDump(dump: String): List<AdbRecentTaskInfo> {
+        val out = ArrayList<AdbRecentTaskInfo>(16)
+
+        var inDisplay0 = false
+
+        var taskId: Int? = null
+        var type: String? = null
+        var visible = false
+        var visibleRequested = false
+        var packageName: String? = null
+        var topResumed = false
+        var activityState: String? = null
+        var nowVisible: Boolean? = null
+        var lastVisibleTime: String? = null
+        var baseDir: String? = null
+        var dataDir: String? = null
+
+        fun flushCurrentTask() {
+            val id = taskId ?: return
+            val t = type ?: return
+            val pkg = packageName ?: return
+            if (isSystemTask(t, pkg)) return
+
+            out.add(
+                AdbRecentTaskInfo(
+                    taskId = id,
+                    packageName = pkg,
+                    visible = visible,
+                    visibleRequested = visibleRequested,
+                    topResumed = topResumed,
+                    activityState = activityState,
+                    nowVisible = nowVisible,
+                    lastVisibleTime = lastVisibleTime,
+                    baseDir = baseDir,
+                    dataDir = dataDir
+                )
+            )
+        }
+
+        fun resetForNextTask() {
+            taskId = null
+            type = null
+            visible = false
+            visibleRequested = false
+            packageName = null
+            topResumed = false
+            activityState = null
+            nowVisible = null
+            lastVisibleTime = null
+            baseDir = null
+            dataDir = null
+        }
+
+        for (line in dump.lineSequence()) {
+            if (!inDisplay0) {
+                if (line.startsWith("Display #0")) {
+                    inDisplay0 = true
+                }
+                continue
+            }
+
+            if (line.startsWith("Resumed activities in task display areas")) {
+                flushCurrentTask()
+                break
+            }
+
+            if (line.startsWith("  * Task{")) {
+                flushCurrentTask()
+                resetForNextTask()
+
+                val headerMatch = taskHeaderRegex.find(line) ?: continue
+                taskId = headerMatch.groupValues[1].toIntOrNull()
+                type = headerMatch.groupValues[2]
+
+                taskHeaderVisibleRegex.find(line)?.groupValues?.get(1)?.toBooleanStrictOrNull()
+                    ?.let { visible = it }
+                taskHeaderVisibleRequestedRegex.find(line)?.groupValues?.get(1)
+                    ?.toBooleanStrictOrNull()
+                    ?.let { visibleRequested = it }
+
+                taskHeaderPackageFromARegex.find(line)?.groupValues?.get(1)
+                    ?.let { packageName = it }
+
+                continue
+            }
+
+            val id = taskId ?: continue
+
+            if (!topResumed && line.contains("topResumedActivity=") && line.contains("t$id")) {
+                topResumed = true
+            }
+
+            packageNameLineRegex.find(line)?.groupValues?.get(1)?.let { packageName = it }
+
+            if (activityState == null) {
+                activityStateRegex.find(line)?.groupValues?.get(1)?.let { activityState = it }
+            }
+
+            if (nowVisible == null) {
+                nowVisibleRegex.find(line)?.groupValues?.get(1)?.toBooleanStrictOrNull()
+                    ?.let { nowVisible = it }
+            }
+
+            if (lastVisibleTime == null) {
+                lastVisibleTimeRegex.find(line)?.groupValues?.get(1)?.let { lastVisibleTime = it }
+            }
+
+            if (baseDir == null) {
+                baseDirRegex.find(line)?.groupValues?.get(1)?.let { baseDir = it }
+            }
+
+            if (dataDir == null) {
+                dataDirRegex.find(line)?.groupValues?.get(1)?.let { dataDir = it }
+            }
+        }
+
+        return out
+    }
+
+    @Suppress("ReturnCount")
+    private fun isSystemTask(type: String, packageName: String): Boolean {
+        if (type == "home") return true
+        if (packageName == "com.android.systemui") return true
+
+        if (packageName == "com.google.android.apps.nexuslauncher") return true
+        if (packageName == "com.google.android.apps.pixel.launcher") return true
+
+        if (packageName.startsWith("com.android.launcher")) return true
+        if (packageName.startsWith("com.google.android.apps.launcher")) return true
+        if (packageName.endsWith(".launcher")) return true
+
+        return false
+    }
+
+    private fun String.toBooleanStrictOrNull(): Boolean? {
+        return when (this) {
+            "true" -> true
+            "false" -> false
+            else -> null
+        }
+    }
+
+    /**
+     * Simulates pressing the system Home button via ADB to return to the launcher.
+     */
+    override suspend fun pressHome() {
+        execute("input keyevent KEYCODE_HOME")
+    }
+
+    /**
+     * Simulates pressing the system Back button via ADB to trigger standard back navigation.
+     */
+    override suspend fun pressBack() {
+        execute("input keyevent KEYCODE_BACK")
     }
 
     /**
@@ -406,6 +711,32 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
                 // ignore
             }
         }
+    }
+
+    private suspend fun executeTelnetLocked(command: String): String = lock.withLock {
+        val (transport, myEpoch) = synchronized(connGuard) {
+            val t = checkNotNull(telnetTransport) { "Telnet is not connected" }
+            t to connectionEpoch
+        }
+
+        Timber.d("[Telnet] execute: %s", command)
+
+        synchronized(connGuard) {
+            check(connectionEpoch == myEpoch && !isManuallyDisconnected) { "Telnet disconnected" }
+        }
+
+        val marker = buildDoneMarker()
+        val (output, exitCode) = transport.exec(command, marker)
+
+        synchronized(connGuard) {
+            check(connectionEpoch == myEpoch && !isManuallyDisconnected) { "Telnet disconnected" }
+        }
+
+        if (exitCode != 0) {
+            throw CommandFailedException(exitCode, output)
+        }
+
+        output.also { Timber.d("[Telnet] result length=%d", it.length) }
     }
 
     private fun buildDoneMarker(): String {
@@ -489,26 +820,39 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
     /**
      * Fast in-memory liveness check; not a protocol-level ping.
      */
-    private fun isConnectedUnsafe(): Boolean = synchronized(connGuard) {
+    private fun isConnectedForPortUnsafe(port: Int): Boolean {
+        return if (isTelnetMode(port)) isTelnetConnectedUnsafe() else isAdbConnectedUnsafe()
+    }
+
+    private fun isAdbConnectedUnsafe(): Boolean = synchronized(connGuard) {
         val s = socket
         val c = connection
         s != null && !s.isClosed && c != null && !isManuallyDisconnected
+    }
+
+    private fun isTelnetConnectedUnsafe(): Boolean = synchronized(connGuard) {
+        val t = telnetTransport
+        t != null && !t.isClosed() && !isManuallyDisconnected
     }
 
     private fun forceCloseNow() {
         // Closes transport immediately, without waiting for the main execution lock.
         val toCloseConn: AdbConnection?
         val toCloseSocket: Socket?
+        val toCloseTelnet: TelnetShellTransport?
 
         synchronized(connGuard) {
             toCloseConn = connection
             toCloseSocket = socket
+            toCloseTelnet = telnetTransport
             connection = null
             socket = null
+            telnetTransport = null
         }
 
         runCatching { toCloseConn?.close() }
         runCatching { toCloseSocket?.close() }
+        runCatching { toCloseTelnet?.close() }
     }
 
     /**
@@ -517,12 +861,15 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
     private fun safeClose() {
         val toCloseConn: AdbConnection?
         val toCloseSocket: Socket?
+        val toCloseTelnet: TelnetShellTransport?
 
         synchronized(connGuard) {
             toCloseConn = connection
             toCloseSocket = socket
+            toCloseTelnet = telnetTransport
             connection = null
             socket = null
+            telnetTransport = null
         }
 
         try {
@@ -535,7 +882,72 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
         } catch (t: Throwable) {
             Timber.w(t, "[ADB] socket close error")
         }
+        try {
+            toCloseTelnet?.close()
+        } catch (t: Throwable) {
+            Timber.w(t, "[Telnet] socket close error")
+        }
     }
+
+    private suspend fun connectTelnet(): Boolean = withContext(Dispatchers.IO) {
+        lock.withLock {
+            val myEpoch = synchronized(connGuard) { connectionEpoch }
+
+            isManuallyDisconnected = false
+
+            val existing = synchronized(connGuard) { telnetTransport }
+            if (existing != null && !existing.isClosed()) {
+                _connectionState.value = AdbConnectionState.Connected
+                Timber.d("[Telnet] connect skipped: already connected")
+                cancelReconnectLoop()
+                return@withLock true
+            }
+
+            _connectionState.value = AdbConnectionState.Connecting
+            Timber.d("[Telnet] discovery started")
+
+            try {
+                val (endpoint, transport) = telnetDiscovery.open()
+
+                val canPublish = synchronized(connGuard) {
+                    connectionEpoch == myEpoch && !isManuallyDisconnected
+                }
+                if (!canPublish) {
+                    runCatching { transport.close() }
+                    _connectionState.value = AdbConnectionState.Disconnected
+                    return@withLock false
+                }
+
+                synchronized(connGuard) {
+                    if (connectionEpoch != myEpoch || isManuallyDisconnected) {
+                        runCatching { transport.close() }
+                        _connectionState.value = AdbConnectionState.Disconnected
+                        return@withLock false
+                    }
+                    runCatching { connection?.close() }
+                    runCatching { socket?.close() }
+                    connection = null
+                    socket = null
+                    telnetTransport = transport
+                }
+
+                _connectionState.value = AdbConnectionState.Connected
+                Timber.d("[Telnet] connected to %s:%d", endpoint.host, endpoint.port)
+                cancelReconnectLoop()
+                true
+            } catch (t: Throwable) {
+                _connectionState.value =
+                    AdbConnectionState.Error(t.message ?: "Telnet connect error")
+                Timber.w(t, "[Telnet] connect error")
+                telnetDiscovery.clearCache()
+                safeClose()
+                scheduleReconnect(host, TELNET_HELPER_PORT, "telnet connect error")
+                false
+            }
+        }
+    }
+
+    private fun isTelnetMode(port: Int) = port == TELNET_HELPER_PORT
 
     private fun isValidPackageName(value: String): Boolean {
         if (!value.contains('.')) return false

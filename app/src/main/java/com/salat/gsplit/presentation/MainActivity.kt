@@ -1,12 +1,15 @@
 package com.salat.gsplit.presentation
 
+import android.content.ClipData
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -16,11 +19,14 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
@@ -41,12 +47,18 @@ import com.salat.navigation.transitions.routedEnterTransition
 import com.salat.navigation.transitions.routedExitTransition
 import com.salat.navigation.transitions.routedPopEnterTransition
 import com.salat.navigation.transitions.routedPopExitTransition
+import com.salat.resources.R
 import com.salat.stub.presentation.navigateToStub
 import com.salat.ui.observeLifecycleFlow
+import com.salat.uikit.component.ConfirmDialog
 import com.salat.uikit.theme.AppTheme
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import presentation.isCanDrawOverlays
+import presentation.openAccessibilitySettings
+import presentation.openOverlayPermissionSettings
+import presentation.toast
 import timber.log.Timber
 
 private const val INTENT_TASK_STATE_KEY = "INTENT_HANDLED"
@@ -55,9 +67,47 @@ private const val INTENT_TASK_STATE_KEY = "INTENT_HANDLED"
 class MainActivity : ComponentActivity() {
     private val viewModel: MainViewModel by viewModels()
 
-    override fun onNewIntent(intent: Intent?) {
+    override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        intent?.let { handleIntent(it) }
+        setIntent(intent)
+        handleIncomingIntent(intent)
+    }
+
+    private val openGsplSettingsImportLauncher = registerForActivityResult(
+        ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            // Persist read permission when provider supports it; safe on API 30
+            try {
+                contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            } catch (_: SecurityException) {
+                // Some providers may not allow persist; transient grant is still fine
+            }
+
+            // Route through ACTION_VIEW to reuse your existing open/import flow
+            startOpenWithFlow(uri)
+        }
+    }
+
+    private fun startOpenWithFlow(uri: Uri) = runCatching {
+        // Use your unique MIME so the intent-filter matches unambiguously
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, "application/gspl")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            // Ensure permission propagation via ClipData for some choosers/providers
+            clipData = ClipData.newRawUri("gspl", uri)
+            // Direct back into this app (no chooser) to follow the same code path you already have
+            setPackage(packageName)
+            // Play nice with singleTop/singleTask setups
+            addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        startActivity(intent)
+    }.onFailure {
+        Timber.e(it)
+        toast("Cannot open file")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -79,6 +129,19 @@ class MainActivity : ComponentActivity() {
         observeLifecycleFlow(viewModel.minimizeApp) {
             this.moveTaskToBack(true)
         }
+
+        observeLifecycleFlow(viewModel.importSettingsTask) {
+            runCatching {
+                openGsplSettingsImportLauncher.launch(
+                    arrayOf(
+                        "application/gspl",
+                        "application/octet-stream",
+                        "*/*"
+                    )
+                )
+            }.onFailure { Timber.e(it) }
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             observeLifecycleFlow(viewModel.nativeSplitLauncherState) {
                 NativeSplitModeUtil().launchSplitScreenMode(this, it)
@@ -97,12 +160,42 @@ class MainActivity : ComponentActivity() {
             val navController = rememberNavController()
             val darkTheme by viewModel.darkTheme.collectAsStateWithLifecycle()
             val autoRunFiller by viewModel.autoRunFiller.collectAsStateWithLifecycle()
+            val importSettingsData by viewModel.importSettingsData.collectAsStateWithLifecycle()
 
             AppTheme(darkTheme = darkTheme) {
                 CompositionLocalProvider(
                     LocalDensity provides scaledDensity,
                     LocalLayoutDirection provides LayoutDirection.Ltr
                 ) {
+                    // Import settings dialog
+                    if (importSettingsData != null) {
+                        val context = LocalContext.current
+
+                        val onImport by rememberUpdatedState {
+                            if (!viewModel.canAccessibility.value) {
+                                context.openAccessibilitySettings()
+                                return@rememberUpdatedState
+                            }
+
+                            if (!context.isCanDrawOverlays()) {
+                                context.openOverlayPermissionSettings()
+                                return@rememberUpdatedState
+                            }
+
+                            viewModel.applyImportSettingsData()
+                        }
+
+                        ConfirmDialog(
+                            title = stringResource(R.string._import),
+                            message = stringResource(R.string.import_data_prompt),
+                            uiScale = uiScale,
+                            negativeAction = false,
+                            onCancel = { viewModel.resetImportData() },
+                            onDismiss = { viewModel.resetImportData() },
+                            onClick = onImport
+                        )
+                    }
+
                     if (!autoRunFiller) {
                         InitNavHost(viewModel, navController)
                     }
@@ -117,6 +210,8 @@ class MainActivity : ComponentActivity() {
                     }
             }
         }
+
+        handleIncomingIntent(intent)
 
         // Check if intent was already handled to avoid re-processing
         val intentHandled = savedInstanceState?.getBoolean(INTENT_TASK_STATE_KEY, false) ?: false
@@ -146,6 +241,20 @@ class MainActivity : ComponentActivity() {
         } catch (e: Exception) {
             Timber.e(e)
         }
+    }
+
+    private fun handleIncomingIntent(intent: Intent) {
+        val action = intent.action
+        val uri = intent.data ?: return
+
+        if (action !in setOf(
+                Intent.ACTION_VIEW,
+                Intent.ACTION_OPEN_DOCUMENT,
+                Intent.ACTION_GET_CONTENT
+            )
+        ) return
+
+        viewModel.getSettingsFromFile(uri.toString())
     }
 }
 

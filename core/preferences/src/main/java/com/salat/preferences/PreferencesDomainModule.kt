@@ -2,6 +2,8 @@ package com.salat.preferences
 
 import com.salat.preferences.domain.DataStoreRepository
 import com.salat.preferences.domain.PreferencesRepository
+import com.salat.preferences.domain.usecases.ApplySettingsBackupUseCase
+import com.salat.preferences.domain.usecases.CreateSettingsSnapshotUseCase
 import com.salat.preferences.domain.usecases.FlowBoolPrefUseCase
 import com.salat.preferences.domain.usecases.FlowBoolPrefsUseCase
 import com.salat.preferences.domain.usecases.FlowPrefsUseCase
@@ -70,4 +72,11 @@ object PreferencesDomainModule {
 
     @Provides
     fun provideFlowPrefsUseCase(preferences: DataStoreRepository) = FlowPrefsUseCase(preferences)
+
+    @Provides
+    fun provideCreateSettingsSnapshotUseCase(preferences: DataStoreRepository) =
+        CreateSettingsSnapshotUseCase(preferences)
+
+    @Provides
+    fun provideApplySettingsBackupUseCase(preferences: DataStoreRepository) = ApplySettingsBackupUseCase(preferences)
 }

@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import presentation.decodeBase64Jvm
 import timber.log.Timber
 
 class FileDownloaderRepositoryImpl(private val context: Context) : FileDownloaderRepository {
@@ -182,5 +183,28 @@ class FileDownloaderRepositoryImpl(private val context: Context) : FileDownloade
         // If needed, consider switching old <29 flow to app-specific dir or tracking DownloadManager IDs.
 
         deleted
+    }
+
+    override suspend fun getSettingsFromFile(uriString: String): String = try {
+        val uri = uriString.toUri()
+        readTextFromUri(uri)?.let { text ->
+            if (text.startsWith("full")) {
+                decodeBase64Jvm(text.removePrefix("full"))
+            } else ""
+        } ?: ""
+    } catch (e: Exception) {
+        Timber.e(e)
+        ""
+    }
+
+    private suspend fun readTextFromUri(uri: Uri): String? = withContext(Dispatchers.IO) {
+        try {
+            context.contentResolver.openInputStream(uri)
+                ?.bufferedReader()
+                .use { it?.readText() }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
     }
 }

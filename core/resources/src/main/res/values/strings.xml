@@ -231,8 +231,8 @@
     <string name="contrast_border">Contrast border</string>
     <string name="contrast_border_desc">A more prominent border around the last launched split item</string>
 
-    <string name="adb_features">ADB</string>
-    <string name="adb_features_description">Parameters related to the execution of auxiliary ADB commands</string>
+    <string name="adb_features">ADB &amp; Telnet</string>
+    <string name="adb_features_description">Parameters related to the execution of auxiliary shell commands</string>
     <string name="adb_helper">ADB Helper</string>
     <string name="adb_helper_description">Unlocks features related to executing ADB commands</string>
     <string name="force_kill_app_title">Force-stop apps before launching in windows</string>
@@ -255,6 +255,14 @@
     <string name="data_fetch_failed">Failed to retrieve data. Please check your internet connection.</string>
     <string name="off">Off</string>
     <string name="enter_your_port">Enter your port number</string>
+
+    <string name="_import">Import</string>
+    <string name="import_data_prompt">Do you want to import this data?</string>
+    <string name="import_export_settings">Import and export settings</string>
+    <string name="import_settings">Import settings</string>
+    <string name="import_settings_desc">Select a file to import all settings. Your current settings will be lost.</string>
+    <string name="export_settings">Export settings</string>
+    <string name="export_settings_desc">Saves a full backup of settings, excluding selected media apps</string>
 
     <string name="about_text"><![CDATA[<strong>Contacts:</strong><br>email: <a href="#email">%1$s</a>&#10240;<br>tg: <a href="#tg">%2$s</a>&#10240;]]></string>
     <string name="api_text"><![CDATA[<strong>Retrieving the Current Split State</strong>
@@ -329,5 +337,5 @@ Launches the autostart split configuration.
 Parameters: first_package, second_package, first_auto_play:[0|1], second_auto_play:[0|1], type:[1x1|2x1|…], dark_background:[0|1], window_shift:[0|1]
 <br>
 Launches a split with the specified configuration.]]></string>
-<!--    <string name="about_text"><![CDATA[<strong>Launching from other apps:</strong><br>Send an intent \"com.salat.gsplit.PresetLauncherActivity\" with the parameter \"id\" containing the preset identifier to launch.<br><br><strong>Launching from MacroDroid:</strong><br>Actions -> Launch Shortcut -> GSplit Preset.<br><br><strong>Contacts:</strong><br>email: <a href="#email">%1$s</a>&#10240;<br>tg: <a href="#tg">%2$s</a>&#10240;]]></string>-->
+    <!--    <string name="about_text"><![CDATA[<strong>Launching from other apps:</strong><br>Send an intent \"com.salat.gsplit.PresetLauncherActivity\" with the parameter \"id\" containing the preset identifier to launch.<br><br><strong>Launching from MacroDroid:</strong><br>Actions -> Launch Shortcut -> GSplit Preset.<br><br><strong>Contacts:</strong><br>email: <a href="#email">%1$s</a>&#10240;<br>tg: <a href="#tg">%2$s</a>&#10240;]]></string>-->
 </resources>

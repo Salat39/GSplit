@@ -3,7 +3,9 @@ package com.salat.statekeeper
 import com.salat.statekeeper.domain.repository.StateKeeperRepository
 import com.salat.statekeeper.domain.usecases.CheckAccessibilityServiceEnabledUseCase
 import com.salat.statekeeper.domain.usecases.CloseDarkScreenFlowUseCase
+import com.salat.statekeeper.domain.usecases.GetImportSettingsRequestUseCase
 import com.salat.statekeeper.domain.usecases.GetSkipAutoLaunchUseCase
+import com.salat.statekeeper.domain.usecases.RequestImportSettingsUseCase
 import com.salat.statekeeper.domain.usecases.SetSkipAutoLaunchUseCase
 import dagger.Module
 import dagger.Provides
@@ -26,4 +28,12 @@ object StateKeeperDomainModule {
     @Provides
     fun provideCheckAccessibilityServiceEnabledUseCase(repository: StateKeeperRepository) =
         CheckAccessibilityServiceEnabledUseCase(repository)
+
+    @Provides
+    fun provideRequestImportSettingsUseCase(repository: StateKeeperRepository) =
+        RequestImportSettingsUseCase(repository)
+
+    @Provides
+    fun provideGetImportSettingsRequestUseCase(repository: StateKeeperRepository) =
+        GetImportSettingsRequestUseCase(repository)
 }

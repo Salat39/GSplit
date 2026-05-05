@@ -1,14 +1,17 @@
 package com.salat.adb.domain.repository
 
 import com.salat.adb.data.entity.AdbConnectionState
-import kotlinx.coroutines.flow.Flow
+import com.salat.adb.data.entity.AdbRecentTaskInfo
+import kotlinx.coroutines.flow.StateFlow
 
 interface AdbRepository {
-    val connectionState: Flow<AdbConnectionState>
+    val connectionState: StateFlow<AdbConnectionState>
 
     suspend fun execute(command: String): String
 
     suspend fun isAppInFreeform(packageName: String): Boolean?
+
+    suspend fun isAppLaunched(packageName: String): Boolean
 
     suspend fun getTaskId(packageName: String): Int?
 
@@ -16,5 +19,21 @@ interface AdbRepository {
 
     suspend fun forceStop(vararg packageNames: String): String
 
+    suspend fun allowActivateVpnAppOp(packageName: String): String
+
+    suspend fun enablePackage(packageName: String): String
+
+    suspend fun enableAndLaunchApp(packageName: String, launchActivity: String?): String
+
+    suspend fun disableUserPackage(packageName: String): String
+
     suspend fun minimize(taskId: Int)
+
+    suspend fun getForegroundAppPackageName(): String?
+
+    suspend fun getRecentTasksFromActivitiesDump(): List<AdbRecentTaskInfo>
+
+    suspend fun pressHome()
+
+    suspend fun pressBack()
 }

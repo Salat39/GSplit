@@ -55,7 +55,6 @@ fun HugeSegmentToggler(
     val segments = remember(items.size) { items.size }
     BoxWithConstraints(
         modifier
-            .height(54.dp)
             .clip(RoundedCornerShape(8.dp))
             .padding(horizontal = 1.dp, vertical = 1.dp)
     ) {
@@ -130,7 +129,8 @@ fun HugeSegmentToggler(
                                 blendMode = BlendMode.SrcOut
                             )
                         }
-                    }
+                    },
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 items.forEachIndexed { index, item ->
                     Column(

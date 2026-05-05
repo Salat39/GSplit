@@ -38,4 +38,8 @@ interface StateKeeperRepository {
     suspend fun setLaunchedWindows(config: LaunchedWindowsConfig?)
 
     fun getLaunchedWindows(): LaunchedWindowsConfig?
+
+    val importSettingsEvents: SharedFlow<Unit>
+
+    suspend fun sendImportSettings()
 }

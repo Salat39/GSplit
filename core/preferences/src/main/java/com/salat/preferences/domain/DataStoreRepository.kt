@@ -65,4 +65,8 @@ interface DataStoreRepository {
     suspend fun clear()
 
     fun getAnyPrefsFlow(vararg prefs: AnyPref): Flow<List<Any>>
+
+    suspend fun exportAllSettings(): String
+
+    suspend fun importAllSettings(serialized: String)
 }

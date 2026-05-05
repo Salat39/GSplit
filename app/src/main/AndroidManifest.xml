@@ -48,6 +48,26 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <intent-filter
+                android:priority="999"
+                tools:ignore="AppLinkUrlError,AppLinkUrlWarning">
+                <action android:name="android.intent.action.VIEW" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <category android:name="android.intent.category.OPENABLE" />
+
+                <!-- <data android:host="*" />-->
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="application/gspl" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\..*\\.gspl" />
+                <data android:pathPattern=".*\\..*\\..*\\..*\\.gspl" />
+                <data android:pathPattern=".*\\..*\\..*\\.gspl" />
+                <data android:pathPattern=".*\\..*\\.gspl" />
+                <data android:pathPattern=".*\\.gspl" />
+                <data android:scheme="content" />
+            </intent-filter>
         </activity>
 
         <activity
@@ -163,6 +183,7 @@
             <grant-uri-permission android:pathPrefix="/downloads/" />
             <grant-uri-permission android:pathPrefix="/apk/" />
             <grant-uri-permission android:pathPrefix="/public_downloads/" />
+            <grant-uri-permission android:pathPrefix="/shared_gspl/" />
         </provider>
     </application>
 

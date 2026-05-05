@@ -3,6 +3,7 @@ package com.salat.filedownloader
 import com.salat.filedownloader.domain.repository.FileDownloaderRepository
 import com.salat.filedownloader.domain.usecases.ClearDownloadedFilesUseCase
 import com.salat.filedownloader.domain.usecases.DownloadFileUseCase
+import com.salat.filedownloader.domain.usecases.GetSettingsFromFileUseCase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -18,4 +19,7 @@ object FileDownloaderDomainModule {
     @Provides
     fun provideClearDownloadedFilesUseCase(repository: FileDownloaderRepository) =
         ClearDownloadedFilesUseCase(repository)
+
+    @Provides
+    fun provideGetSettingsFromFileUseCase(repository: FileDownloaderRepository) = GetSettingsFromFileUseCase(repository)
 }

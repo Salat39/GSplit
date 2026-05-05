@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
@@ -38,9 +39,14 @@ import com.salat.uikit.component.TopShadow
 import com.salat.uikit.component.toAnnotatedString
 import com.salat.uikit.preview.PreviewScreen
 import com.salat.uikit.theme.AppTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import presentation.cleanupShareTempFiles
 import presentation.openAppSystemSettings
 import presentation.sendEmail
+import presentation.shareTextAsGsplFile
 import presentation.spannedFromHtml
+import timber.log.Timber
 
 private const val EMAIL = "svc.andrei@gmail.com"
 private const val TG = "salat39"
@@ -63,6 +69,18 @@ internal fun SettingsGeneralScreen(
 ) = Scaffold { innerPadding ->
 
     val context = LocalContext.current
+
+    LaunchedEffect(state.exportBackup) {
+        val export = state.exportBackup
+        if (export.isBlank()) return@LaunchedEffect
+        withContext(Dispatchers.IO) {
+            runCatching {
+                context.cleanupShareTempFiles()
+                context.shareTextAsGsplFile(export, "full", "full")
+                sendAction(SettingsGeneralViewModel.Action.SetExportBackup(""))
+            }.onFailure { Timber.e(it) }
+        }
+    }
 
     Column(
         modifier = Modifier
@@ -198,6 +216,37 @@ internal fun SettingsGeneralScreen(
                         icon = painterResource(R.drawable.ic_window_replace),
                         iconSize = 27,
                         onClick = onNavigateToAppSwitchOverlay
+                    )
+                }
+
+                RenderGroupDivider()
+
+                Spacer(Modifier.height(12.dp))
+
+                // Other
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(AppTheme.colors.surfaceSettingsLayer1)
+                ) {
+                    RenderGroupTitle(stringResource(R.string.import_export_settings))
+
+                    RenderGroupButton(
+                        title = stringResource(R.string.import_settings),
+                        subtitle = stringResource(R.string.import_settings_desc),
+                        icon = painterResource(R.drawable.ic_import),
+                        iconSize = 24,
+                        onClick = { sendAction(SettingsGeneralViewModel.Action.RequestImportSettings) }
+                    )
+
+                    RenderIconMenuDivider()
+
+                    RenderGroupButton(
+                        title = stringResource(R.string.export_settings),
+                        subtitle = stringResource(R.string.export_settings_desc),
+                        icon = painterResource(R.drawable.ic_share2),
+                        iconSize = 24,
+                        onClick = { sendAction(SettingsGeneralViewModel.Action.ExportAllSettings) }
                     )
                 }
 

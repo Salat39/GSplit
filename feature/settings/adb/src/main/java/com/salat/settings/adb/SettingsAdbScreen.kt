@@ -34,11 +34,11 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.salat.adb.data.entity.TELNET_HELPER_PORT
 import com.salat.resources.R
 import com.salat.settings.adb.entity.DisplayAdbState
 import com.salat.settings.common.presentation.RenderGroupDivider
@@ -157,7 +157,6 @@ internal fun SettingsAdbScreen(
                     )
                     Spacer(Modifier.height(8.dp))
 
-                    val context = LocalContext.current
                     val offText = stringResource(R.string.off)
                     val list = remember(state.adbHelperPort) {
                         if (isCarBuildType) {
@@ -165,22 +164,25 @@ internal fun SettingsAdbScreen(
                                 SegmentTogglerItem(text = "Atlas", subtitle = "5555"),
                                 SegmentTogglerItem(text = "Preface", subtitle = "7777"),
                                 SegmentTogglerItem(
-                                    text = context.getString(R.string.other),
+                                    text = "Custom",
                                     subtitle = when {
                                         state.adbHelperPort != 7777 &&
                                             state.adbHelperPort != 5555 &&
+                                            state.adbHelperPort != TELNET_HELPER_PORT &&
                                             state.adbHelperPort != -1 -> state.adbHelperPort.toString()
 
                                         else -> null
                                     }
                                 ),
+                                SegmentTogglerItem(text = "Telnet"),
                                 SegmentTogglerItem(text = offText),
                             )
                         } else {
                             listOf(
                                 SegmentTogglerItem(text = "5555"),
                                 SegmentTogglerItem(text = "7777"),
-                                SegmentTogglerItem(text = context.getString(R.string.other)),
+                                SegmentTogglerItem(text = "Custom"),
+                                SegmentTogglerItem(text = "Telnet"),
                                 SegmentTogglerItem(text = offText),
                             )
                         }
@@ -199,8 +201,9 @@ internal fun SettingsAdbScreen(
                                 selectedIndex = when {
                                     state.adbHelperPort == 5555 && state.enableAdbHelper -> 0
                                     state.adbHelperPort == 7777 && state.enableAdbHelper -> 1
+                                    state.adbHelperPort == TELNET_HELPER_PORT && state.enableAdbHelper -> 3
                                     state.adbHelperPort > 0 && state.enableAdbHelper -> 2
-                                    !state.enableAdbHelper -> 3
+                                    !state.enableAdbHelper -> 4
                                     else -> 0
                                 },
                                 fontSize = 14,
@@ -224,7 +227,12 @@ internal fun SettingsAdbScreen(
 
                                     2 -> inputPortDialog = true
 
-                                    3 -> sendAction(SettingsAdbViewModel.Action.SetEnableAdbHelper(false))
+                                    3 -> {
+                                        sendAction(SettingsAdbViewModel.Action.SetPort(TELNET_HELPER_PORT))
+                                        sendAction(SettingsAdbViewModel.Action.SetEnableAdbHelper(true))
+                                    }
+
+                                    4 -> sendAction(SettingsAdbViewModel.Action.SetEnableAdbHelper(false))
                                 }
                             }
                         }

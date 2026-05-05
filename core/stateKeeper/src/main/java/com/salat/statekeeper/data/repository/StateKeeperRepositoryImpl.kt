@@ -75,4 +75,11 @@ class StateKeeperRepositoryImpl : StateKeeperRepository {
     }
 
     override fun getLaunchedWindows() = _launchedWindows.value
+
+    private val _importSettingsEvents = MutableSharedFlow<Unit>()
+    override val importSettingsEvents = _importSettingsEvents.asSharedFlow()
+
+    override suspend fun sendImportSettings() {
+        _importSettingsEvents.emit(Unit)
+    }
 }

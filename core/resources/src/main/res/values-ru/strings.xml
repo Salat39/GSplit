@@ -225,8 +225,8 @@
     <string name="contrast_border">Контрастная рамка</string>
     <string name="contrast_border_desc">Более заметная рамка вокруг элемента последнего запущенного сплита</string>
 
-    <string name="adb_features">ADB</string>
-    <string name="adb_features_description">Параметры связанные с исполнением вспомогательных ADB команд</string>
+    <string name="adb_features">ADB &amp; Telnet</string>
+    <string name="adb_features_description">Параметры связанные с исполнением вспомогательных shell команд</string>
     <string name="adb_helper">ADB-помощник</string>
     <string name="adb_helper_description">Разблокирует функции связанные с выполнением ADB команд</string>
     <string name="force_kill_app_title">Принудительная остановка приложений перед запуском в окнах</string>
@@ -249,6 +249,14 @@
     <string name="data_fetch_failed">Не удалось получить данные. Проверьте интернет</string>
     <string name="off">Выкл.</string>
     <string name="enter_your_port">Введите свой номер порта</string>
+
+    <string name="_import">Импорт</string>
+    <string name="import_data_prompt">Вы хотите импортировать эти данные?</string>
+    <string name="import_export_settings">Импорт и экспорт настроек</string>
+    <string name="import_settings">Импорт настроек</string>
+    <string name="import_settings_desc">Выберите файл для импорта настроек. Вы также можете открыть файл непосредственно в системе, выбрав программу GSplit. Обратите внимание: после импорта все текущие настройки будут заменены</string>
+    <string name="export_settings">Экспорт настроек</string>
+    <string name="export_settings_desc">Создать резервную копию настроек, за исключением выбранных медиаприложений и плеера по умолчанию</string>
 
     <string name="about_text"><![CDATA[<strong>Контакты:</strong><br>email: <a href="#email">%1$s</a>&#10240;<br>tg: <a href="#tg">%2$s</a>&#10240;]]></string>
     <string name="api_text"><![CDATA[<strong>Получение текущего состояния сплита</strong>

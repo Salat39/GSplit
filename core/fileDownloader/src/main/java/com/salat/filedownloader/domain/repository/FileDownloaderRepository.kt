@@ -7,4 +7,6 @@ interface FileDownloaderRepository {
     suspend fun download(url: String, fileName: String, userAgent: String): Flow<DownloadState>
 
     suspend fun clear(): Int
+
+    suspend fun getSettingsFromFile(uriString: String): String
 }
