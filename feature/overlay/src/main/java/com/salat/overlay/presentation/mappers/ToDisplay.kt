@@ -1,12 +1,15 @@
 package com.salat.overlay.presentation.mappers
 
 import android.graphics.drawable.Drawable
+import androidx.compose.ui.geometry.Rect
 import com.salat.overlay.presentation.entity.DisplayAppPreset
+import com.salat.overlay.presentation.entity.DisplayFreeWindow
 import com.salat.overlay.presentation.entity.DisplayPresetType
 import com.salat.overlay.presentation.entity.DisplayReplacementAppItem
 import com.salat.overlay.presentation.entity.DisplaySplitPreset
 import com.salat.replacementappsstorage.domain.entity.ReplacementAppItem
 import com.salat.splitpresets.domain.entity.AppPreset
+import com.salat.splitpresets.domain.entity.FreeWindowPreset
 import com.salat.splitpresets.domain.entity.PresetType
 import com.salat.splitpresets.domain.entity.SplitPreset
 
@@ -32,7 +35,14 @@ internal fun SplitPreset.toDisplayPreset() = DisplaySplitPreset(
     darkBackground = darkBackground,
     bottomWindowShift = bottomWindowShift,
     quickAccess = quickAccess,
-    id = id
+    id = id,
+    windows = windows.map { it.toDisplayPreset() },
+    ratio = ratio
+)
+
+internal fun FreeWindowPreset.toDisplayPreset() = DisplayFreeWindow(
+    app = app.toDisplayPreset(),
+    bounds = Rect(left, top, right, bottom)
 )
 
 internal fun AppPreset.toDisplayPreset() = DisplayAppPreset(
@@ -49,6 +59,8 @@ internal fun PresetType.toDisplayPreset() = when (this) {
     PresetType.THREE_TO_FOUR -> DisplayPresetType.THREE_TO_FOUR
     PresetType.THREE_TO_TWO -> DisplayPresetType.THREE_TO_TWO
     PresetType.FOUR_TO_THREE -> DisplayPresetType.FOUR_TO_THREE
+    PresetType.FREE -> DisplayPresetType.FREE
+    PresetType.CUSTOM -> DisplayPresetType.CUSTOM
 }
 
 internal fun DisplaySplitPreset.toDomainPreset() = SplitPreset(
@@ -59,7 +71,8 @@ internal fun DisplaySplitPreset.toDomainPreset() = SplitPreset(
     darkBackground = darkBackground,
     bottomWindowShift = bottomWindowShift,
     quickAccess = quickAccess,
-    id = id
+    id = id,
+    ratio = ratio
 )
 
 internal fun DisplayAppPreset.toDomainPreset() = AppPreset(
@@ -76,4 +89,6 @@ internal fun DisplayPresetType.toDomainPreset() = when (this) {
     DisplayPresetType.THREE_TO_FOUR -> PresetType.THREE_TO_FOUR
     DisplayPresetType.THREE_TO_TWO -> PresetType.THREE_TO_TWO
     DisplayPresetType.FOUR_TO_THREE -> PresetType.FOUR_TO_THREE
+    DisplayPresetType.FREE -> PresetType.FREE
+    DisplayPresetType.CUSTOM -> PresetType.CUSTOM
 }

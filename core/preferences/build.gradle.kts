@@ -23,6 +23,7 @@ android {
         buildConfigField("boolean", "SHIFT_BEFORE_CLOSE", "false")
         buildConfigField("int", "TOOLBAR_EXTRA_SPACE", "0")
         buildConfigField("int", "BOTTOM_WINDOW_SHIFT_SIZE", "116")
+        buildConfigField("boolean", "AUTOSTART_AFTER_PAUSE", "false")
     }
 
     buildTypes {
@@ -33,6 +34,7 @@ android {
             buildConfigField("boolean", "SYSTEM_BAR_COMPENSATOR", "false")
             buildConfigField("boolean", "COMPAT_PLAY", "true")
             buildConfigField("boolean", "SHIFT_BEFORE_CLOSE", "true")
+            buildConfigField("boolean", "AUTOSTART_AFTER_PAUSE", "true")
             buildConfigField(
                 "int",
                 "TOOLBAR_EXTRA_SPACE",

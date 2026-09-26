@@ -13,5 +13,7 @@ internal enum class WindowType {
     THREE_TO_FOUR_RIGHT,
     THREE_TO_TWO_RIGHT,
     FOUR_TO_THREE_RIGHT,
+    CUSTOM_LEFT,
+    CUSTOM_RIGHT,
     FULLSCREEN
 }

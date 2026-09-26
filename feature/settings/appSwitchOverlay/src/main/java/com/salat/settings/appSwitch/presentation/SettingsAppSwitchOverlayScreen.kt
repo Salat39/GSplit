@@ -3,16 +3,13 @@ package com.salat.settings.appSwitch.presentation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -43,7 +40,9 @@ import com.salat.resources.R
 import com.salat.settings.common.presentation.RenderGroupDivider
 import com.salat.settings.common.presentation.RenderGroupTitle
 import com.salat.settings.common.presentation.RenderIconMenuDivider
-import com.salat.settings.common.presentation.RenderSliderTitle
+import com.salat.settings.common.presentation.RenderSettingsContent
+import com.salat.settings.common.presentation.RenderSettingsGroup
+import com.salat.settings.common.presentation.RenderSliderSetting
 import com.salat.settings.common.presentation.RenderToolbar
 import com.salat.settings.common.presentation.components.AccessibilityServiceRequireDialog
 import com.salat.settings.common.presentation.toDoubleString
@@ -51,6 +50,7 @@ import com.salat.ui.rememberPainterResource
 import com.salat.uikit.component.ConfirmDialog
 import com.salat.uikit.component.RenderSettingsButton
 import com.salat.uikit.component.RenderSwitcher
+import com.salat.uikit.component.SettingsDefaults
 import com.salat.uikit.component.TopShadow
 import com.salat.uikit.component.ValueSlider
 import com.salat.uikit.preview.PreviewScreen
@@ -94,6 +94,7 @@ internal fun SettingsAppSwitchOverlayScreen(
         ConfirmDialog(
             title = stringResource(R.string.reset_position),
             message = stringResource(R.string.confirm_reset_overlay_position),
+            okButtonTitle = stringResource(R.string.reset),
             uiScale = state.uiScale,
             negativeAction = true,
             onCancel = { resetPositionDialog = false },
@@ -121,15 +122,8 @@ internal fun SettingsAppSwitchOverlayScreen(
         ) {
             TopShadow()
 
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(AppTheme.colors.surfaceSettingsLayer1)
-                ) {
+            RenderSettingsContent {
+                RenderSettingsGroup {
                     RenderGroupTitle(stringResource(R.string.general))
 
                     RenderSwitcher(
@@ -147,6 +141,7 @@ internal fun SettingsAppSwitchOverlayScreen(
                             title = stringResource(R.string.quick_launch_apps),
                             subtitle = stringResource(R.string.quick_launch_apps_desc),
                             enable = true,
+                            showChevron = true,
                             onClick = onNavigateToReplacementApps
                         )
 
@@ -178,22 +173,12 @@ internal fun SettingsAppSwitchOverlayScreen(
 
                 if (state.overlayEnabled == true) {
                     // Overlay size
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(AppTheme.colors.surfaceSettingsLayer1)
-                    ) {
-                        RenderSliderTitle(
-                            stringResource(R.string.overlay_size)
-                        )
-
-                        Row(
-                            modifier = Modifier
-                                .padding(horizontal = 20.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    RenderSettingsGroup {
+                        RenderSliderSetting(
+                            title = stringResource(R.string.overlay_size),
+                            value = state.overlayScale.toDoubleString(2)
                         ) {
                             ValueSlider(
-                                modifier = Modifier.weight(1f),
                                 value = state.overlayScale,
                                 valueRange = 0.3f..MAX_SCALE,
                                 onValueChange = { newValue ->
@@ -202,13 +187,6 @@ internal fun SettingsAppSwitchOverlayScreen(
                                 defaultMark = BuildConfig.OVERLAY_SCALE,
                                 enabled = true,
                                 step = 0.05f
-                            )
-
-                            Text(
-                                modifier = Modifier.padding(start = 10.dp),
-                                text = state.overlayScale.toDoubleString(2),
-                                style = AppTheme.typography.screenTitle,
-                                color = AppTheme.colors.contentPrimary,
                             )
                         }
                     }
@@ -223,7 +201,7 @@ internal fun SettingsAppSwitchOverlayScreen(
                         text = stringResource(R.string.preview),
                         style = AppTheme.typography.aboutText,
                         textAlign = TextAlign.Center,
-                        color = AppTheme.colors.contentPrimary.copy(.4f)
+                        color = AppTheme.colors.contentPrimary.copy(SettingsDefaults.SUBTITLE_ALPHA)
                     )
                     Spacer(Modifier.height(12.dp))
 
@@ -263,22 +241,12 @@ internal fun SettingsAppSwitchOverlayScreen(
                     Spacer(Modifier.height(24.dp))
 
                     // Bg alpha
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(AppTheme.colors.surfaceSettingsLayer1)
-                    ) {
-                        RenderSliderTitle(
-                            stringResource(R.string.background_transparency)
-                        )
-
-                        Row(
-                            modifier = Modifier
-                                .padding(horizontal = 20.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    RenderSettingsGroup {
+                        RenderSliderSetting(
+                            title = stringResource(R.string.background_transparency),
+                            value = state.overlayBgAlpha.toDoubleString(2)
                         ) {
                             ValueSlider(
-                                modifier = Modifier.weight(1f),
                                 value = state.overlayBgAlpha,
                                 valueRange = 0f..1f,
                                 onValueChange = { newValue ->
@@ -288,13 +256,6 @@ internal fun SettingsAppSwitchOverlayScreen(
                                 enabled = true,
                                 step = 0.05f
                             )
-
-                            Text(
-                                modifier = Modifier.padding(start = 10.dp),
-                                text = state.overlayBgAlpha.toDoubleString(2),
-                                style = AppTheme.typography.screenTitle,
-                                color = AppTheme.colors.contentPrimary,
-                            )
                         }
                     }
 
@@ -302,22 +263,12 @@ internal fun SettingsAppSwitchOverlayScreen(
                     Spacer(Modifier.height(12.dp))
 
                     // Icon alpha
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(AppTheme.colors.surfaceSettingsLayer1)
-                    ) {
-                        RenderSliderTitle(
-                            stringResource(R.string.icon_transparency)
-                        )
-
-                        Row(
-                            modifier = Modifier
-                                .padding(horizontal = 20.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    RenderSettingsGroup {
+                        RenderSliderSetting(
+                            title = stringResource(R.string.icon_transparency),
+                            value = state.overlayIconAlpha.toDoubleString(2)
                         ) {
                             ValueSlider(
-                                modifier = Modifier.weight(1f),
                                 value = state.overlayIconAlpha,
                                 valueRange = 0f..1f,
                                 onValueChange = { newValue ->
@@ -327,24 +278,13 @@ internal fun SettingsAppSwitchOverlayScreen(
                                 enabled = true,
                                 step = 0.05f
                             )
-
-                            Text(
-                                modifier = Modifier.padding(start = 10.dp),
-                                text = state.overlayIconAlpha.toDoubleString(2),
-                                style = AppTheme.typography.screenTitle,
-                                color = AppTheme.colors.contentPrimary,
-                            )
                         }
                     }
 
                     RenderGroupDivider()
                     Spacer(Modifier.height(18.dp))
 
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(AppTheme.colors.surfaceSettingsLayer1)
-                    ) {
+                    RenderSettingsGroup {
                         RenderGroupTitle(stringResource(R.string.quick_launch_window))
 
                         RenderSwitcher(
@@ -374,22 +314,12 @@ internal fun SettingsAppSwitchOverlayScreen(
                     Spacer(Modifier.height(12.dp))
 
                     // Window size
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(AppTheme.colors.surfaceSettingsLayer1)
-                    ) {
-                        RenderSliderTitle(
-                            stringResource(R.string.window_size)
-                        )
-
-                        Row(
-                            modifier = Modifier
-                                .padding(horizontal = 20.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    RenderSettingsGroup {
+                        RenderSliderSetting(
+                            title = stringResource(R.string.window_size),
+                            value = state.windowScale.toDoubleString(2)
                         ) {
                             ValueSlider(
-                                modifier = Modifier.weight(1f),
                                 value = state.windowScale,
                                 valueRange = 0.3f..MAX_SCALE,
                                 onValueChange = { newValue ->
@@ -398,13 +328,6 @@ internal fun SettingsAppSwitchOverlayScreen(
                                 defaultMark = BuildConfig.OVERLAY_WINDOW_SCALE,
                                 enabled = true,
                                 step = 0.05f
-                            )
-
-                            Text(
-                                modifier = Modifier.padding(start = 10.dp),
-                                text = state.windowScale.toDoubleString(2),
-                                style = AppTheme.typography.screenTitle,
-                                color = AppTheme.colors.contentPrimary,
                             )
                         }
                     }

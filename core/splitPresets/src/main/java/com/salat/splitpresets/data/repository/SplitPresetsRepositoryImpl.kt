@@ -3,9 +3,11 @@ package com.salat.splitpresets.data.repository
 import com.salat.preferences.domain.DataStoreRepository
 import com.salat.preferences.domain.entity.StringPref
 import com.salat.splitpresets.data.entity.AppPresetDto
+import com.salat.splitpresets.data.entity.FreeWindowPresetDto
 import com.salat.splitpresets.data.entity.PresetTypeDto
 import com.salat.splitpresets.data.entity.SplitPresetDto
 import com.salat.splitpresets.domain.entity.AppPreset
+import com.salat.splitpresets.domain.entity.FreeWindowPreset
 import com.salat.splitpresets.domain.entity.PresetType
 import com.salat.splitpresets.domain.entity.SplitPreset
 import com.salat.splitpresets.domain.repository.SplitPresetsRepository
@@ -119,6 +121,12 @@ class SplitPresetsRepositoryImpl(
         dataStore.save(StringPref.PresetsStorage, patched.serializeToString())
     }
 
+    override suspend fun reorderPresets(ids: List<Long>) {
+        val positions = ids.withIndex().associate { (index, id) -> id to index }
+        val sorted = loadItems().sortedBy { positions[it.id] ?: Int.MAX_VALUE }
+        dataStore.save(StringPref.PresetsStorage, sorted.serializeToString())
+    }
+
     private suspend fun loadItems(): List<SplitPresetDto> {
         val data = dataStore.load(StringPref.PresetsStorage)
         return try {
@@ -144,21 +152,21 @@ class SplitPresetsRepositoryImpl(
         autoStart = autoStart,
         darkBackground = darkBackground,
         bottomWindowShift = bottomWindowShift,
-        quickAccess = quickAccess
+        quickAccess = quickAccess,
+        windows = windows.map { it.toDomain() },
+        ratio = ratio
     )
 
-    private fun List<SplitPresetDto>.toDomain() = map {
-        SplitPreset(
-            id = it.id,
-            firstApp = it.firstApp.toDomain(),
-            type = it.type.toDomain(),
-            secondApp = it.secondApp.toDomain(),
-            autoStart = it.autoStart,
-            darkBackground = it.darkBackground,
-            bottomWindowShift = it.bottomWindowShift,
-            quickAccess = it.quickAccess
-        )
-    }
+    private fun List<SplitPresetDto>.toDomain() = map { it.toDomain() }
+
+    private fun FreeWindowPresetDto.toDomain() = FreeWindowPreset(
+        app = app.toDomain(),
+        left = left,
+        top = top,
+        right = right,
+        bottom = bottom,
+        alwaysOnTop = alwaysOnTop
+    )
 
     private fun AppPresetDto.toDomain() = AppPreset(
         title = title,
@@ -174,6 +182,8 @@ class SplitPresetsRepositoryImpl(
         PresetTypeDto.THREE_TO_FOUR -> PresetType.THREE_TO_FOUR
         PresetTypeDto.THREE_TO_TWO -> PresetType.THREE_TO_TWO
         PresetTypeDto.FOUR_TO_THREE -> PresetType.FOUR_TO_THREE
+        PresetTypeDto.FREE -> PresetType.FREE
+        PresetTypeDto.CUSTOM -> PresetType.CUSTOM
     }
 
     private fun SplitPreset.toDto() = SplitPresetDto(
@@ -184,7 +194,18 @@ class SplitPresetsRepositoryImpl(
         darkBackground = darkBackground,
         bottomWindowShift = bottomWindowShift,
         quickAccess = quickAccess,
-        id = id
+        id = id,
+        windows = windows.map { it.toDto() },
+        ratio = ratio
+    )
+
+    private fun FreeWindowPreset.toDto() = FreeWindowPresetDto(
+        app = app.toDto(),
+        left = left,
+        top = top,
+        right = right,
+        bottom = bottom,
+        alwaysOnTop = alwaysOnTop
     )
 
     private fun AppPreset.toDto() = AppPresetDto(
@@ -200,5 +221,7 @@ class SplitPresetsRepositoryImpl(
         PresetType.THREE_TO_FOUR -> PresetTypeDto.THREE_TO_FOUR
         PresetType.THREE_TO_TWO -> PresetTypeDto.THREE_TO_TWO
         PresetType.FOUR_TO_THREE -> PresetTypeDto.FOUR_TO_THREE
+        PresetType.FREE -> PresetTypeDto.FREE
+        PresetType.CUSTOM -> PresetTypeDto.CUSTOM
     }
 }

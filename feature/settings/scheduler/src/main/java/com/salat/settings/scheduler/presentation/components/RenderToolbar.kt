@@ -12,16 +12,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.salat.resources.R
+import com.salat.uikit.component.BaseIconButton
 import com.salat.uikit.theme.AppTheme
 
 @Composable
@@ -33,7 +32,7 @@ internal fun RenderToolbar(onAddClick: () -> Unit, onBack: () -> Unit) {
             .background(AppTheme.colors.surfaceBackground),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(
+        BaseIconButton(
             modifier = Modifier
                 .size(56.dp)
                 .padding(start = 2.dp),
@@ -41,7 +40,7 @@ internal fun RenderToolbar(onAddClick: () -> Unit, onBack: () -> Unit) {
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                tint = Color.White,
+                tint = AppTheme.colors.contentPrimary,
                 contentDescription = "back"
             )
         }
@@ -58,7 +57,7 @@ internal fun RenderToolbar(onAddClick: () -> Unit, onBack: () -> Unit) {
 
         Spacer(Modifier.width(10.dp))
 
-        IconButton(
+        BaseIconButton(
             modifier = Modifier
                 .size(52.dp),
             onClick = onAddClick

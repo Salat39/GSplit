@@ -25,7 +25,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -57,12 +56,14 @@ import com.salat.settings.replacementapps.components.RenderToolbar
 import com.salat.settings.replacementapps.entity.DisplayReplacementAppItem
 import com.salat.ui.rememberIsLandscape
 import com.salat.ui.rememberPainterResource
+import com.salat.uikit.component.BaseIconButton
 import com.salat.uikit.component.ConfirmDialog
 import com.salat.uikit.component.TopShadow
 import com.salat.uikit.preview.PreviewScreen
 import com.salat.uikit.theme.AppTheme
 
 private const val ICON_SIZE = 28
+private val ListItemShape = RoundedCornerShape(16.dp)
 
 @Composable
 internal fun SettingsReplacementAppsScreen(
@@ -99,6 +100,7 @@ internal fun SettingsReplacementAppsScreen(
         ConfirmDialog(
             title = stringResource(R.string.deleting_a_preset),
             message = stringResource(R.string.deleting_a_quick_app_confirm),
+            okButtonTitle = stringResource(R.string.delete),
             uiScaleState = uiScaleState,
             negativeAction = true,
             onCancel = { deleteConfirmDialog = null },
@@ -135,7 +137,7 @@ internal fun SettingsReplacementAppsScreen(
             Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .background(AppTheme.colors.surfaceLayer1)
+                .background(AppTheme.colors.surfaceSettings)
         ) {
             TopShadow()
 
@@ -184,17 +186,16 @@ internal fun SettingsReplacementAppsScreen(
                         modifier = animatedModifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                        colors = CardDefaults.cardColors(containerColor = AppTheme.colors.cardItemBackground)
+                        shape = ListItemShape,
+                        colors = CardDefaults.cardColors(containerColor = AppTheme.colors.surfaceSettingsLayer1)
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .heightIn(min = 64.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(AppTheme.colors.cardItemBackground)
+                                    .clip(ListItemShape)
+                                    .background(AppTheme.colors.surfaceSettingsLayer1)
                                     .padding(16.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -291,7 +292,7 @@ internal fun SettingsReplacementAppsScreen(
                                                     .background(
                                                         if (app.firstWindow) {
                                                             AppTheme.colors.addSplitTop
-                                                        } else AppTheme.colors.surfaceMenu
+                                                        } else AppTheme.colors.surfaceSettings
                                                     ),
                                                 contentAlignment = Alignment.Center
                                             ) {
@@ -320,7 +321,7 @@ internal fun SettingsReplacementAppsScreen(
                                                     .background(
                                                         if (app.secondWindow) {
                                                             AppTheme.colors.addSplitTop
-                                                        } else AppTheme.colors.surfaceMenu
+                                                        } else AppTheme.colors.surfaceSettings
                                                     ),
                                                 contentAlignment = Alignment.Center
                                             ) {
@@ -353,7 +354,7 @@ internal fun SettingsReplacementAppsScreen(
                                                     .background(
                                                         if (app.firstWindow) {
                                                             AppTheme.colors.addSplitTop
-                                                        } else AppTheme.colors.surfaceMenu
+                                                        } else AppTheme.colors.surfaceSettings
                                                     ),
                                                 contentAlignment = Alignment.Center
                                             ) {
@@ -382,7 +383,7 @@ internal fun SettingsReplacementAppsScreen(
                                                     .background(
                                                         if (app.secondWindow) {
                                                             AppTheme.colors.addSplitTop
-                                                        } else AppTheme.colors.surfaceMenu
+                                                        } else AppTheme.colors.surfaceSettings
                                                     ),
                                                 contentAlignment = Alignment.Center
                                             ) {
@@ -401,7 +402,7 @@ internal fun SettingsReplacementAppsScreen(
 
                                 Spacer(Modifier.width(16.dp))
 
-                                IconButton(
+                                BaseIconButton(
                                     modifier = Modifier
                                         .size(36.dp)
                                         .padding(start = 2.dp),

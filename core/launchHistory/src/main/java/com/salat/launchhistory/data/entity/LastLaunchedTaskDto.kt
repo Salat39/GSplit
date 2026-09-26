@@ -10,5 +10,7 @@ data class LastLaunchedTaskDto(
     val autoStart: Boolean,
     val darkBackground: Boolean,
     val bottomWindowShift: Boolean,
-    val id: Long
+    val id: Long,
+    val windows: List<LastLaunchedWindowDto> = emptyList(),
+    val ratio: Float = .5f
 )

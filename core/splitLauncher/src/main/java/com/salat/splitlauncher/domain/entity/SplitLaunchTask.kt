@@ -7,5 +7,7 @@ data class SplitLaunchTask(
     val autoStart: Boolean,
     val darkBackground: Boolean,
     val bottomWindowShift: Boolean,
-    val id: Long
+    val id: Long,
+    val windows: List<SplitLaunchWindow> = emptyList(),
+    val ratio: Float = .5f
 )

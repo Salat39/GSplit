@@ -25,6 +25,7 @@ dependencies {
     implementation(project(Modules.CORE_SCREEN_SPECS))
     implementation(project(Modules.CORE_REPLACEMENT_APPS_STORAGE))
     implementation(project(Modules.CORE_SPLIT_PRESETS))
+    implementation(project(Modules.CORE_SPLIT_LAUNCHER))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)

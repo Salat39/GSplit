@@ -4,16 +4,23 @@ import androidx.compose.runtime.Immutable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
+import com.salat.adb.domain.usecases.AdbConnectionStateUseCase
+import com.salat.adb.domain.usecases.ApplyRequiredSystemSettingsUseCase
 import com.salat.filedownloader.domain.usecases.ClearDownloadedFilesUseCase
 import com.salat.filedownloader.domain.usecases.DownloadFileUseCase
 import com.salat.launchhistory.domain.entity.LastLaunchedTask
+import com.salat.launchhistory.domain.entity.LastLaunchedType
 import com.salat.launchhistory.domain.usecases.GetHistoryFlowUseCase
 import com.salat.preferences.domain.entity.BoolPref
 import com.salat.preferences.domain.entity.FloatPref
 import com.salat.preferences.domain.entity.IntPref
 import com.salat.preferences.domain.usecases.FlowPrefsUseCase
 import com.salat.preferences.domain.usecases.LoadFloatPrefUseCase
+import com.salat.preferences.domain.usecases.SaveBoolPrefUseCase
+import com.salat.preferences.domain.usecases.SaveIntPrefUseCase
 import com.salat.remoteconfig.domain.usecases.GetAppUpdateFlowUseCase
+import com.salat.settings.common.presentation.entity.DisplayAdbState
+import com.salat.settings.common.presentation.mappers.toDisplayAdbState
 import com.salat.settings.list.presentation.entity.DisplayAppUpdate
 import com.salat.settings.list.presentation.entity.DisplaySplitPreset
 import com.salat.settings.list.presentation.entity.UiDownloadState
@@ -23,9 +30,11 @@ import com.salat.settings.list.presentation.mappers.toUi
 import com.salat.settings.list.presentation.route.SplitListNavRoute
 import com.salat.split.list.BuildConfig
 import com.salat.splitlauncher.domain.entity.SplitLaunchSource
+import com.salat.splitlauncher.domain.usecases.GetNoCaptionWindowsFlowUseCase
 import com.salat.splitlauncher.domain.usecases.LaunchSplitUseCase
 import com.salat.splitpresets.domain.usecases.DeleteSplitPresetUseCase
 import com.salat.splitpresets.domain.usecases.GetPresetsFlowUseCase
+import com.salat.splitpresets.domain.usecases.ReorderSplitPresetsUseCase
 import com.salat.splitpresets.domain.usecases.SetAutoStartSplitPresetUseCase
 import com.salat.splitpresets.domain.usecases.SetDarkBackgroundSplitPresetUseCase
 import com.salat.splitpresets.domain.usecases.SetQuickAccessSplitPresetUseCase
@@ -40,6 +49,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import presentation.BaseSyncViewModel
@@ -59,11 +69,17 @@ class ListViewModel @Inject constructor(
     private val setDarkBackgroundSplitPresetUseCase: SetDarkBackgroundSplitPresetUseCase,
     private val setWindowShiftSplitPresetUseCase: SetWindowShiftSplitPresetUseCase,
     private val setQuickAccessSplitPresetUseCase: SetQuickAccessSplitPresetUseCase,
+    private val reorderSplitPresetsUseCase: ReorderSplitPresetsUseCase,
     private val loadFloatPrefUseCase: LoadFloatPrefUseCase,
     private val flowPrefsUseCase: FlowPrefsUseCase,
     private val getAppUpdateFlowUseCase: GetAppUpdateFlowUseCase,
     private val downloadFileUseCase: DownloadFileUseCase,
-    private val clearDownloadedFilesUseCase: ClearDownloadedFilesUseCase
+    private val clearDownloadedFilesUseCase: ClearDownloadedFilesUseCase,
+    private val saveBoolPrefUseCase: SaveBoolPrefUseCase,
+    private val saveIntPrefUseCase: SaveIntPrefUseCase,
+    private val adbConnectionStateUseCase: AdbConnectionStateUseCase,
+    private val applyRequiredSystemSettingsUseCase: ApplyRequiredSystemSettingsUseCase,
+    private val getNoCaptionWindowsFlowUseCase: GetNoCaptionWindowsFlowUseCase
 ) : BaseSyncViewModel<ListViewModel.ViewState, ListViewModel.Action>(
     ViewState(toolbarExtraSize = savedStateHandle.toRoute<SplitListNavRoute>().toolbarExtraSize)
 ) {
@@ -102,6 +118,27 @@ class ListViewModel @Inject constructor(
             }
 
             launch {
+                flowPrefsUseCase.execute(BoolPref.EnableAdbHelper, IntPref.AdbHelperPort).firstOrNull()?.let { prefs ->
+                    sendAction(
+                        Action.InitAdbPrefs(
+                            enableAdbHelper = prefs[0] as Boolean,
+                            adbHelperPort = prefs[1] as Int
+                        )
+                    )
+                }
+            }
+
+            launch {
+                adbConnectionStateUseCase.flow.collect { status ->
+                    sendAction(Action.SetAdbConnectionState(status.toDisplayAdbState()))
+                }
+            }
+
+            launch {
+                getNoCaptionWindowsFlowUseCase.flow.collect { sendAction(Action.SetNoCaptionWindows(it)) }
+            }
+
+            launch {
                 getPresetsFlowUseCase.flow.collect {
                     sendAction(Action.UpdateItems(it.toDisplay(), true))
                 }
@@ -126,13 +163,17 @@ class ListViewModel @Inject constructor(
             return
         }
 
-        val packages = buildList(2) {
-            historyItem.firstApp?.packageName?.let { add(it) }
-            historyItem.secondApp?.packageName?.let { add(it) }
-        }.toTypedArray()
-        val appsInfo = findInstalledAppsUseCase.execute(*packages)
+        val packages = if (historyItem.type == LastLaunchedType.FREE) {
+            historyItem.windows.map { it.app.packageName }.distinct()
+        } else {
+            buildList(2) {
+                historyItem.firstApp?.packageName?.let { add(it) }
+                historyItem.secondApp?.packageName?.let { add(it) }
+            }
+        }
+        val appsInfo = findInstalledAppsUseCase.execute(*packages.toTypedArray())
 
-        if (appsInfo.size == 2) {
+        if (packages.isNotEmpty() && appsInfo.size == packages.size) {
             val lastLaunchPreset = try {
                 historyItem.toDisplay(appsInfo, false) // TODO autoStart?
             } catch (e: Exception) {
@@ -157,7 +198,25 @@ class ListViewModel @Inject constructor(
     }
 
     override fun onReduceState(viewAction: Action): ViewState = when (viewAction) {
-        is Action.UpdateItems -> state.value.copy(items = viewAction.items, dataLoaded = viewAction.dataLoaded)
+        is Action.UpdateItems -> state.value.copy(
+            // Reorder mode - keep the local order because a storage update can arrive late
+            items = if (state.value.reorderMode) {
+                viewAction.items.inOrderOf(state.value.items)
+            } else viewAction.items,
+            dataLoaded = viewAction.dataLoaded
+        )
+
+        is Action.SetReorderMode -> state.value.copy(reorderMode = viewAction.value)
+
+        is Action.MovePreset -> state.value.copy(items = state.value.items.moved(viewAction.fromId, viewAction.toId))
+
+        is Action.CommitPresetOrder -> {
+            val ids = state.value.items.map { it.id }
+            viewModelScope.launch(Dispatchers.IO) {
+                reorderSplitPresetsUseCase.execute(ids)
+            }
+            state.value
+        }
 
         is Action.UpdateHistory -> state.value.copy(history = viewAction.item)
 
@@ -208,6 +267,40 @@ class ListViewModel @Inject constructor(
             lastLaunchedSplitContrast = viewAction.lastLaunchedSplitContrast
         )
 
+        is Action.InitAdbPrefs -> state.value.copy(
+            enableAdbHelper = viewAction.enableAdbHelper,
+            adbHelperPort = viewAction.adbHelperPort
+        )
+
+        is Action.SetAdbConnectionState -> state.value.copy(adbConnectionState = viewAction.state)
+
+        is Action.SetNoCaptionWindows -> state.value.copy(noCaptionWindows = viewAction.value)
+
+        is Action.SelectAdbPort -> {
+            viewModelScope.launch(Dispatchers.IO) {
+                saveIntPrefUseCase.execute(IntPref.AdbHelperPort, viewAction.port)
+                saveBoolPrefUseCase.execute(BoolPref.EnableAdbHelper, true)
+            }
+            state.value.copy(adbHelperPort = viewAction.port, enableAdbHelper = true)
+        }
+
+        is Action.DisableAdb -> {
+            viewModelScope.launch(Dispatchers.IO) {
+                saveBoolPrefUseCase.execute(BoolPref.EnableAdbHelper, false)
+            }
+            state.value.copy(enableAdbHelper = false)
+        }
+
+        is Action.RunQuickSetup -> {
+            viewModelScope.launch(Dispatchers.IO) {
+                Timber.d("[QuickSetup] ${applyRequiredSystemSettingsUseCase.execute(viewAction.packageName)}")
+                sendAction(Action.FinishQuickSetup)
+            }
+            state.value
+        }
+
+        is Action.FinishQuickSetup -> state.value.copy(quickSetupFinished = true)
+
         is Action.StartDownloadUpdate -> {
             viewModelScope.launch(Dispatchers.IO) {
                 Timber.d("Start download: ${viewAction.url}")
@@ -228,6 +321,18 @@ class ListViewModel @Inject constructor(
         )
     }
 
+    private fun List<DisplaySplitPreset>.inOrderOf(current: List<DisplaySplitPreset>): List<DisplaySplitPreset> {
+        val positions = current.withIndex().associate { (index, item) -> item.id to index }
+        return sortedBy { positions[it.id] ?: Int.MAX_VALUE }
+    }
+
+    private fun List<DisplaySplitPreset>.moved(fromId: Long, toId: Long): List<DisplaySplitPreset> {
+        val from = indexOfFirst { it.id == fromId }
+        val to = indexOfFirst { it.id == toId }
+        if (from < 0 || to < 0 || from == to) return this
+        return toMutableList().apply { add(to, removeAt(from)) }
+    }
+
     @Immutable
     data class ViewState(
         val items: List<DisplaySplitPreset> = emptyList(),
@@ -237,7 +342,13 @@ class ListViewModel @Inject constructor(
         val showLastLaunchedSplit: Boolean = false,
         val lastLaunchedSplitContrast: Boolean = false,
         val updateDownloadState: UiDownloadState? = null,
-        val appUpdateInfo: DisplayAppUpdate? = null
+        val appUpdateInfo: DisplayAppUpdate? = null,
+        val enableAdbHelper: Boolean = false,
+        val adbHelperPort: Int = -1,
+        val adbConnectionState: DisplayAdbState = DisplayAdbState.Disconnected,
+        val quickSetupFinished: Boolean = false,
+        val noCaptionWindows: Boolean = false,
+        val reorderMode: Boolean = false
     ) : MviViewState
 
     sealed class Action : MviAction {
@@ -250,8 +361,18 @@ class ListViewModel @Inject constructor(
         internal class MarkWindowShiftPreset(val id: Long, val value: Boolean) : Action()
         internal class MarkQuickAccessPreset(val id: Long, val value: Boolean) : Action()
         internal class UpdatePref(val showLastLaunchedSplit: Boolean, val lastLaunchedSplitContrast: Boolean) : Action()
+        internal class InitAdbPrefs(val enableAdbHelper: Boolean, val adbHelperPort: Int) : Action()
+        internal class SetAdbConnectionState(val state: DisplayAdbState) : Action()
+        internal class SetNoCaptionWindows(val value: Boolean) : Action()
+        internal class SelectAdbPort(val port: Int) : Action()
+        internal data object DisableAdb : Action()
+        internal class RunQuickSetup(val packageName: String) : Action()
+        internal data object FinishQuickSetup : Action()
         internal class StartDownloadUpdate(val url: String) : Action()
         internal class SetDownloadUpdateState(val value: UiDownloadState?) : Action()
         internal class SetAppUpdateInfo(val update: DisplayAppUpdate?) : Action()
+        internal class SetReorderMode(val value: Boolean) : Action()
+        internal class MovePreset(val fromId: Long, val toId: Long) : Action()
+        internal data object CommitPresetOrder : Action()
     }
 }

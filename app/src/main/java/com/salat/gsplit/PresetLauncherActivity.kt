@@ -5,7 +5,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
@@ -26,6 +25,7 @@ import androidx.navigation.compose.rememberNavController
 import com.salat.gsplit.presentation.components.startFreeformHack
 import com.salat.navigation.noUiGraph
 import com.salat.navigation.routs.NoUiNavGraph
+import com.salat.ui.enableEdgeToEdgeKeepCutoutMode
 import com.salat.ui.observeLifecycleFlow
 import com.salat.uikit.theme.AppTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -38,7 +38,7 @@ class PresetLauncherActivity : ComponentActivity() {
     private val viewModel: PresetLauncherViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        enableEdgeToEdge(
+        enableEdgeToEdgeKeepCutoutMode(
             SystemBarStyle.dark(Color.Transparent.toArgb()),
             SystemBarStyle.dark(Color.Transparent.toArgb())
         )
@@ -93,9 +93,9 @@ class PresetLauncherActivity : ComponentActivity() {
         handleIntent(intent)
     }
 
-    override fun onNewIntent(intent: Intent?) {
+    override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        intent?.let { handleIntent(it) }
+        handleIntent(intent)
     }
 
     private fun handleIntent(intent: Intent) {
@@ -106,8 +106,18 @@ class PresetLauncherActivity : ComponentActivity() {
         val firstPackage = intent.getStringExtra("first_package") ?: ""
         val secondPackage = intent.getStringExtra("second_package") ?: ""
 
+        val freePackage = intent.getStringExtra("free_package") ?: ""
+        val freeBounds = intent.getFloatArrayExtra("free_bounds")
+
         if (launchLast) {
             viewModel.launchLastSplit()
+        } else if (freePackage.isNotEmpty() && freeBounds?.size == 4) {
+            viewModel.launchFreeWindow(
+                packageName = freePackage,
+                bounds = freeBounds,
+                autoPlay = intent.getBooleanExtra("free_auto_play", false),
+                pin = intent.getBooleanExtra("free_pin", false)
+            )
         } else if (firstPackage.isNotEmpty() && secondPackage.isNotEmpty()) {
             val firstAutoPlay = intent.getIntExtra("first_auto_play", 0)
             val secondAutoPlay = intent.getIntExtra("second_auto_play", 0)

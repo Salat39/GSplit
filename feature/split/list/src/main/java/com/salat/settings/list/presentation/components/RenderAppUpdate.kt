@@ -12,27 +12,34 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import com.salat.resources.R
 import com.salat.settings.list.presentation.entity.DisplayAppUpdate
 import com.salat.settings.list.presentation.entity.UiDownloadState
+import com.salat.ui.rememberPainterResource
 import com.salat.uikit.component.ThinWhiteProgress
 import com.salat.uikit.component.toAnnotatedString
 import com.salat.uikit.theme.AppTheme
@@ -41,13 +48,17 @@ import java.math.RoundingMode
 import java.text.DecimalFormat
 import presentation.spannedFromHtml
 
+private val UpdateCardShape = RoundedCornerShape(20.dp)
+private val UpdateIconTileSize = 40.dp
+private val UpdateIconTextGap = 12.dp
+
 @Composable
 internal fun RenderAppUpdate(
     info: DisplayAppUpdate,
     updateDownloadState: UiDownloadState?,
     onStartDownload: (String) -> Unit
 ) {
-    Spacer(Modifier.height(16.dp))
+    Spacer(Modifier.height(8.dp))
 
     val context = LocalContext.current
     val targetColor = if (info.mandatory) {
@@ -58,52 +69,69 @@ internal fun RenderAppUpdate(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp)
-            .clip(RoundedCornerShape(14.dp))
-            .border(
-                shape = RoundedCornerShape(14.dp),
-                width = 1.dp,
-                color = targetColor
-            )
-            .background(targetColor.copy(.2f))
-            .padding(vertical = 16.dp, horizontal = 18.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 16.dp)
+            .clip(UpdateCardShape)
+            .background(AppTheme.colors.surfaceSettingsLayer1)
+            .border(1.dp, targetColor.copy(.45f), UpdateCardShape)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        if (info.version.isNotEmpty()) {
-            Text(
-                text = "${stringResource(R.string.new_version_available)}: ${info.version}",
-                color = AppTheme.colors.contentPrimary,
-                style = AppTheme.typography.dialogListTitle
-            )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(
+                modifier = Modifier
+                    .size(UpdateIconTileSize)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(targetColor.copy(.18f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    painter = rememberPainterResource(R.drawable.ic_import),
+                    contentDescription = null,
+                    tint = lerp(targetColor, Color.White, .45f),
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+            Spacer(Modifier.width(UpdateIconTextGap))
+            Column {
+                Text(
+                    text = stringResource(R.string.new_version_available),
+                    color = AppTheme.colors.contentPrimary,
+                    style = AppTheme.typography.cardTitle
+                )
+                if (info.version.isNotEmpty()) {
+                    Spacer(Modifier.height(3.dp))
+                    Text(
+                        text = info.version,
+                        color = AppTheme.colors.contentPrimary.copy(.5f),
+                        style = AppTheme.typography.dialogSubtitle
+                    )
+                }
+            }
         }
 
         if (info.text.isNotEmpty()) {
             Text(
+                modifier = Modifier.padding(start = UpdateIconTileSize + UpdateIconTextGap),
                 text = info.text
                     .spannedFromHtml()
                     .toAnnotatedString(),
-                color = AppTheme.colors.contentPrimary,
-                style = AppTheme.typography.dialogSubtitle
+                color = AppTheme.colors.contentPrimary.copy(.7f),
+                style = AppTheme.typography.aboutText
             )
         }
 
         if (info.downloadUrl.isNotEmpty() || info.infoUrl.isNotEmpty()) {
             Row(
                 modifier = Modifier
-                    .fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(
-                    16.dp,
-                    Alignment.End
-                ),
+                    .fillMaxWidth()
+                    .padding(start = UpdateIconTileSize + UpdateIconTextGap),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 if (updateDownloadState is UiDownloadState.InProgress) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(
-                            6.dp,
-                            Alignment.CenterVertically
-                        ),
+                        verticalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterVertically),
                         modifier = Modifier.weight(1f)
                     ) {
                         val percent = updateDownloadState.percent
@@ -113,72 +141,52 @@ internal fun RenderAppUpdate(
                         )
 
                         if (info.size.isNotEmpty()) {
-                            val text =
-                                "${info.size.scaleSize(percent)} / ${info.size}"
                             Text(
-                                text = text,
+                                text = "${info.size.scaleSize(percent)} / ${info.size}",
                                 color = AppTheme.colors.contentPrimary,
-                                style = AppTheme.typography.dialogSubtitle.copy(
-                                    fontSize = 8.sp
-                                )
+                                style = AppTheme.typography.dialogSubtitle
                             )
                         }
                     }
                 }
 
-                if (info.downloadUrl.isNotEmpty()) {
-                    Text(
-                        text = stringResource(R.string.download),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(
-                                AppTheme.colors.contentPrimary.copy(
-                                    .04f
-                                )
-                            )
-                            // .clickable { context.shareText(info.downloadUrl) }
-                            .clickable(updateDownloadState == null) {
-                                onStartDownload(info.downloadUrl)
-                            }
-                            .padding(
-                                horizontal = 12.dp,
-                                vertical = 8.dp
-                            )
-                            .then(
-                                if (updateDownloadState != null) {
-                                    Modifier.alpha(.2f)
-                                } else Modifier
-                            ),
-                        color = AppTheme.colors.contentPrimary,
-                        style = AppTheme.typography.sourceType
+                if (info.infoUrl.isNotEmpty()) {
+                    UpdateButton(
+                        text = stringResource(R.string.details),
+                        background = AppTheme.colors.contentPrimary.copy(.08f),
+                        onClick = { context.openUrlSmart(info.infoUrl) }
                     )
                 }
 
-                if (info.infoUrl.isNotEmpty()) {
-                    Text(
-                        text = stringResource(R.string.details),
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .background(
-                                AppTheme.colors.contentPrimary.copy(
-                                    .04f
-                                )
-                            )
-                            .clickable { context.openUrlSmart(info.infoUrl) }
-                            .padding(
-                                horizontal = 12.dp,
-                                vertical = 8.dp
-                            ),
-                        color = AppTheme.colors.contentPrimary,
-                        style = AppTheme.typography.sourceType
+                if (info.downloadUrl.isNotEmpty()) {
+                    UpdateButton(
+                        text = stringResource(R.string.download),
+                        background = AppTheme.colors.contentAccent,
+                        enabled = updateDownloadState == null,
+                        onClick = { onStartDownload(info.downloadUrl) }
                     )
                 }
             }
         }
     }
 
-    Spacer(Modifier.height(12.dp))
+    Spacer(Modifier.height(8.dp))
 }
+
+@Composable
+private fun UpdateButton(text: String, background: Color, enabled: Boolean = true, onClick: () -> Unit) = Text(
+    text = text,
+    modifier = Modifier
+        .heightIn(min = 40.dp)
+        .clip(RoundedCornerShape(14.dp))
+        .background(if (enabled) background else AppTheme.colors.contentPrimary.copy(.05f))
+        .clickable(enabled = enabled, onClick = onClick)
+        .wrapContentHeight()
+        .padding(horizontal = 18.dp, vertical = 8.dp),
+    color = AppTheme.colors.contentPrimary.copy(if (enabled) 1f else .38f),
+    style = AppTheme.typography.cardFormatTitle,
+    maxLines = 1
+)
 
 private fun String.scaleSize(percent: Int): String {
     // Split strictly by space; collapse multiple spaces first.

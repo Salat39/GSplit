@@ -29,6 +29,7 @@ dependencies {
     implementation(project(Modules.FEATURE_SETTINGS_REPLACEMENT_APPS))
     implementation(project(Modules.FEATURE_SETTINGS_API))
 
+    implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.animation.android)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

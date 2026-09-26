@@ -7,12 +7,17 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.salat.uikit.component.SettingsDefaults
 import com.salat.uikit.theme.AppTheme
 
 @Composable
 fun RenderSliderTitle(title: String) {
     Text(
-        modifier = Modifier.padding(start = 24.dp, end = 20.dp, top = 18.dp),
+        modifier = Modifier.padding(
+            start = SettingsDefaults.RowHorizontalPadding,
+            end = SettingsDefaults.RowHorizontalPadding,
+            top = 18.dp
+        ),
         text = title,
         style = AppTheme.typography.screenTitle,
         color = AppTheme.colors.contentPrimary

@@ -7,6 +7,7 @@ import com.salat.gsplit.presentation.mappers.toLauncherDomain
 import com.salat.launchhistory.domain.entity.LastLaunchedApp
 import com.salat.launchhistory.domain.entity.LastLaunchedTask
 import com.salat.launchhistory.domain.entity.LastLaunchedType
+import com.salat.launchhistory.domain.entity.LastLaunchedWindow
 import com.salat.launchhistory.domain.usecases.GetLastLaunchedSplitUseCase
 import com.salat.preferences.domain.entity.FloatPref
 import com.salat.preferences.domain.entity.IntPref
@@ -16,6 +17,7 @@ import com.salat.splitlauncher.domain.entity.SplitLaunchApp
 import com.salat.splitlauncher.domain.entity.SplitLaunchSource
 import com.salat.splitlauncher.domain.entity.SplitLaunchTask
 import com.salat.splitlauncher.domain.entity.SplitLaunchType
+import com.salat.splitlauncher.domain.entity.SplitLaunchWindow
 import com.salat.splitlauncher.domain.usecases.GetFreedomHackFlowUseCase
 import com.salat.splitlauncher.domain.usecases.LaunchSplitUseCase
 import com.salat.splitpresets.domain.usecases.GetPresetByIdUseCase
@@ -182,6 +184,36 @@ class PresetLauncherViewModel @Inject constructor(
         }
     }
 
+    internal fun launchFreeWindow(packageName: String, bounds: FloatArray, autoPlay: Boolean, pin: Boolean) =
+        viewModelScope.launch(Dispatchers.IO) {
+            val (left, top, right, bottom) = bounds
+            val window = SplitLaunchWindow(
+                app = SplitLaunchApp(title = packageName, packageName = packageName, autoPlay = autoPlay),
+                left = left,
+                top = top,
+                right = right,
+                bottom = bottom,
+                alwaysOnTop = pin
+            )
+            val task = SplitLaunchTask(
+                firstApp = null,
+                type = SplitLaunchType.FREE,
+                secondApp = null,
+                autoStart = false,
+                darkBackground = false,
+                bottomWindowShift = false,
+                id = 0L,
+                windows = listOf(window)
+            )
+
+            launchSplitUseCase.execute(task, SplitLaunchSource.SHORTCUT)
+
+            // disable split autorun on application startup
+            setSkipAutoLaunchUseCase.execute(true)
+
+            _finishState.send(Unit)
+        }
+
     private fun LastLaunchedApp.toSplitLaunchApp(): SplitLaunchApp {
         return SplitLaunchApp(
             title = this.title,
@@ -202,7 +234,18 @@ class PresetLauncherViewModel @Inject constructor(
             autoStart = this.autoStart,
             darkBackground = this.darkBackground,
             bottomWindowShift = this.bottomWindowShift,
-            id = this.id
+            id = this.id,
+            windows = this.windows.map { it.toSplitLaunchWindow() },
+            ratio = this.ratio
         )
     }
+
+    private fun LastLaunchedWindow.toSplitLaunchWindow() = SplitLaunchWindow(
+        app = app.toSplitLaunchApp(),
+        left = left,
+        top = top,
+        right = right,
+        bottom = bottom,
+        alwaysOnTop = alwaysOnTop
+    )
 }

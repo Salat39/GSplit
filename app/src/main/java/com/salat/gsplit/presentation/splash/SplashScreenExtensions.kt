@@ -4,6 +4,8 @@ import android.animation.ObjectAnimator
 import android.os.Build
 import android.view.View
 import android.view.animation.OvershootInterpolator
+import android.window.SplashScreenView
+import androidx.annotation.RequiresApi
 import androidx.core.animation.doOnEnd
 import androidx.core.splashscreen.SplashScreen
 import androidx.core.splashscreen.SplashScreenViewProvider
@@ -15,34 +17,43 @@ fun SplashScreen.pulseAnimation() {
     }
 }
 
-private fun pulseAnimation(screen: SplashScreenViewProvider) = try {
-    val startScale = 1f
-    val endScale = 1.10f
-    val duration = 350L
+@RequiresApi(Build.VERSION_CODES.S)
+private fun pulseAnimation(screen: SplashScreenViewProvider) {
+    val iconView = (screen.view as? SplashScreenView)?.iconView
+    if (iconView == null) {
+        screen.remove()
+        return
+    }
 
-    val zoomX = ObjectAnimator.ofFloat(
-        screen.iconView,
-        View.SCALE_X,
-        startScale,
-        endScale
-    )
-    zoomX.interpolator = OvershootInterpolator()
-    zoomX.duration = duration
-    zoomX.doOnEnd { screen.remove() }
+    try {
+        val startScale = 1f
+        val endScale = 1.10f
+        val duration = 350L
 
-    val zoomY = ObjectAnimator.ofFloat(
-        screen.iconView,
-        View.SCALE_Y,
-        startScale,
-        endScale
-    )
-    zoomY.interpolator = OvershootInterpolator()
-    zoomY.duration = duration
-    zoomY.doOnEnd { screen.remove() }
+        val zoomX = ObjectAnimator.ofFloat(
+            iconView,
+            View.SCALE_X,
+            startScale,
+            endScale
+        )
+        zoomX.interpolator = OvershootInterpolator()
+        zoomX.duration = duration
+        zoomX.doOnEnd { screen.remove() }
 
-    zoomX.start()
-    zoomY.start()
-} catch (e: Exception) {
-    Timber.e(e)
-    screen.remove()
+        val zoomY = ObjectAnimator.ofFloat(
+            iconView,
+            View.SCALE_Y,
+            startScale,
+            endScale
+        )
+        zoomY.interpolator = OvershootInterpolator()
+        zoomY.duration = duration
+        zoomY.doOnEnd { screen.remove() }
+
+        zoomX.start()
+        zoomY.start()
+    } catch (e: Exception) {
+        Timber.e(e)
+        screen.remove()
+    }
 }

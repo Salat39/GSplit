@@ -5,6 +5,7 @@ import com.salat.launchhistory.domain.entity.LastLaunchedApp
 import com.salat.launchhistory.domain.entity.LastLaunchedTask
 import com.salat.launchhistory.domain.entity.LastLaunchedType
 import com.salat.settings.list.presentation.entity.DisplayAppPreset
+import com.salat.settings.list.presentation.entity.DisplayFreeWindow
 import com.salat.settings.list.presentation.entity.DisplayPresetType
 import com.salat.settings.list.presentation.entity.DisplaySplitPreset
 import com.salat.systemapps.domain.entity.InstalledAppInfo
@@ -17,7 +18,18 @@ internal fun LastLaunchedTask.toDisplay(appsInfo: List<InstalledAppInfo>, autoSt
     darkBackground = darkBackground,
     bottomWindowShift = bottomWindowShift,
     quickAccess = false,
-    id = 0
+    id = 0,
+    windows = windows.map { window ->
+        DisplayFreeWindow(
+            app = window.app.toDisplay(appsInfo.find { app -> app.packageName == window.app.packageName }),
+            left = window.left,
+            top = window.top,
+            right = window.right,
+            bottom = window.bottom,
+            alwaysOnTop = window.alwaysOnTop
+        )
+    },
+    ratio = ratio
 )
 
 internal fun LastLaunchedApp.toDisplay(find: InstalledAppInfo?) = DisplayAppPreset(
@@ -34,4 +46,6 @@ internal fun LastLaunchedType.toDisplay() = when (this) {
     LastLaunchedType.THREE_TO_FOUR -> DisplayPresetType.THREE_TO_FOUR
     LastLaunchedType.THREE_TO_TWO -> DisplayPresetType.THREE_TO_TWO
     LastLaunchedType.FOUR_TO_THREE -> DisplayPresetType.FOUR_TO_THREE
+    LastLaunchedType.FREE -> DisplayPresetType.FREE
+    LastLaunchedType.CUSTOM -> DisplayPresetType.CUSTOM
 }

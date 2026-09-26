@@ -1,4 +1,4 @@
-package com.salat.settings.adb.entity
+package com.salat.settings.common.presentation.entity
 
 import androidx.compose.runtime.Immutable
 

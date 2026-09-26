@@ -9,6 +9,7 @@ private object IntPrefKey {
     const val TOOLBAR_EXTRA_SPACE = "TOOLBAR_EXTRA_SPACE"
     const val BOTTOM_WINDOW_SHIFT_SIZE = "BOTTOM_WINDOW_SHIFT_SIZE"
     const val AUTOSTART_DELAY = "AUTOSTART_DELAY"
+    const val AUTOSTART_PAUSE_THRESHOLD = "AUTOSTART_PAUSE_THRESHOLD"
     const val HEIGHT_CORRECTOR = "HEIGHT_CORRECTOR"
     const val WINDOW_CLOSING_EXTRA_PAUSE = "WINDOW_CLOSING_EXTRA_PAUSE"
     const val ADB_HELPER_PORT = "ADB_HELPER_PORT"
@@ -29,6 +30,8 @@ sealed class IntPref(override val key: String, override val default: Int) : AnyP
     )
 
     data object AutostartDelay : IntPref(IntPrefKey.AUTOSTART_DELAY, 2000)
+
+    data object AutostartPauseThreshold : IntPref(IntPrefKey.AUTOSTART_PAUSE_THRESHOLD, 60_000)
 
     data object HeightCorrector : IntPref(IntPrefKey.HEIGHT_CORRECTOR, 0)
 

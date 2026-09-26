@@ -96,9 +96,10 @@ class RemoteConfigRepositoryImpl : RemoteConfigRepository {
                                 val displayVersion = if (jsonBody.has("display_version")) {
                                     jsonBody.getString("display_version")
                                 } else null
-                                val downloadUrl = if (jsonBody.has("download_url")) {
-                                    jsonBody.getString("download_url")
-                                } else null
+                                val buildTypeDownloadUrlKey =
+                                    if (BuildConfig.BUILD_TYPE == "car") "download_car_url" else "download_general_url"
+                                val downloadUrl = jsonBody.optString(buildTypeDownloadUrlKey)
+                                    .ifBlank { jsonBody.optString("download_url") }
                                 val infoUrl = if (jsonBody.has("info_url")) {
                                     jsonBody.getString("info_url")
                                 } else null
@@ -118,7 +119,7 @@ class RemoteConfigRepositoryImpl : RemoteConfigRepository {
                                         size = displaySize ?: "",
                                         text = displayText ?: "",
                                         code = versionCode,
-                                        downloadUrl = downloadUrl ?: "",
+                                        downloadUrl = downloadUrl,
                                         infoUrl = infoUrl ?: "",
                                         mandatory = mandatory ?: false
                                     )

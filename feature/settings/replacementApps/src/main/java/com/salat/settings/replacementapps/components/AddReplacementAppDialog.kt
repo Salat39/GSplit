@@ -9,19 +9,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.RadioButton
-import androidx.compose.material3.RadioButtonColors
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
@@ -33,19 +29,28 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.salat.resources.R
 import com.salat.settings.replacementapps.entity.DeviceAppInfo
 import com.salat.settings.replacementapps.entity.SelectedDialogApp
-import com.salat.ui.clickableNoRipple
 import com.salat.ui.rememberIsLandscape
 import com.salat.uikit.component.BaseDialog
+import com.salat.uikit.component.DialogAppIconShape
+import com.salat.uikit.component.DialogAppList
+import com.salat.uikit.component.DialogButton
+import com.salat.uikit.component.DialogButtonKind
+import com.salat.uikit.component.DialogButtons
+import com.salat.uikit.component.DialogContainerPadding
+import com.salat.uikit.component.DialogInsetShape
+import com.salat.uikit.component.DialogTextPadding
+import com.salat.uikit.component.DialogTitle
+import com.salat.uikit.component.DialogTopPadding
 import com.salat.uikit.component.RenderSwitcher
+import com.salat.uikit.component.SettingsDefaults
 import com.salat.uikit.theme.AppTheme
+import presentation.capitalizeFirstLetter
 
 @Composable
 fun AddReplacementAppDialog(
@@ -67,177 +72,54 @@ fun AddReplacementAppDialog(
         var secondWindow by remember { mutableStateOf(false) }
         var autoPlay by remember { mutableStateOf(false) }
 
-        Column(
-            modifier = Modifier
-                .padding(top = 22.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.adding_app),
-                modifier = Modifier.padding(horizontal = 24.dp),
-                color = AppTheme.colors.contentPrimary,
-                style = AppTheme.typography.dialogTitle,
-                overflow = TextOverflow.Ellipsis,
-                maxLines = 2
-            )
-            Spacer(modifier = Modifier.height(12.dp))
+        Column(modifier = Modifier.padding(top = DialogTopPadding)) {
+            DialogTitle(stringResource(R.string.adding_app))
+            Spacer(modifier = Modifier.height(16.dp))
 
             if (list.isEmpty()) {
                 RenderScan()
             } else {
                 var preSelected by remember { mutableStateOf<DeviceAppInfo?>(null) }
 
-                Spacer(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(Color.White.copy(.1f))
+                DialogAppList(
+                    items = list,
+                    title = { it.appName },
+                    subtitle = { it.packageName },
+                    isSelected = { it.packageName == preSelected?.packageName },
+                    onClick = { preSelected = it },
+                    icon = { app ->
+                        DrawableImage(
+                            drawable = app.icon,
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .clip(DialogAppIconShape)
+                        )
+                    }
                 )
 
-                LazyColumn(
+                Spacer(Modifier.height(16.dp))
+
+                val firstTitle = stringResource(if (isLandscape) R.string.left_window else R.string.top_window)
+                val secondTitle = stringResource(if (isLandscape) R.string.right_window else R.string.bottom_window)
+
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .weight(1f)
+                        .padding(horizontal = DialogContainerPadding),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    item(key = -1) {
-                        Spacer(
-                            Modifier
-                                .height(.8.dp)
-                        )
-                    }
-                    itemsIndexed(
-                        items = list,
-                        key = { index, _ -> index }
-                    ) { _, item ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { preSelected = item }
-                                .padding(vertical = 2.dp)
-                                .padding(end = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            RadioButton(
-                                selected = (preSelected?.packageName == item.packageName),
-                                onClick = { preSelected = item },
-                                colors = RadioButtonColors(
-                                    selectedColor = AppTheme.colors.contentPrimary.copy(.8f),
-                                    unselectedColor = AppTheme.colors.contentPrimary.copy(.3f),
-                                    disabledSelectedColor = AppTheme.colors.contentPrimary.copy(.3f),
-                                    disabledUnselectedColor = AppTheme.colors.contentPrimary.copy(.3f)
-                                )
-                            )
-
-                            item.icon?.let { icon ->
-                                DrawableImage(
-                                    drawable = icon,
-                                    modifier = Modifier
-                                        .size(32.dp)
-                                        .clip(RoundedCornerShape(6.dp))
-                                )
-                                Spacer(Modifier.width(10.dp))
-                            }
-
-                            Column {
-                                Text(
-                                    text = item.appName,
-                                    style = AppTheme.typography.dialogListTitle,
-                                    overflow = TextOverflow.Ellipsis,
-                                    maxLines = 1,
-                                    color = AppTheme.colors.contentPrimary
-                                )
-                                Text(
-                                    text = item.packageName,
-                                    style = AppTheme.typography.dialogSubtitle,
-                                    overflow = TextOverflow.Ellipsis,
-                                    maxLines = 1,
-                                    color = AppTheme.colors.contentPrimary.copy(.5f)
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Spacer(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(Color.White.copy(.1f))
-                )
-
-                val firstTitle = stringResource(
-                    if (isLandscape) {
-                        R.string.left_window
-                    } else {
-                        R.string.top_window
-                    }
-                )
-                val secondTitle =
-                    stringResource(if (isLandscape) R.string.right_window else R.string.bottom_window)
-
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier
-                            .clickableNoRipple {
-                                firstWindow = !firstWindow
-                            }
-                            .weight(1f)
-                            .padding(horizontal = 12.dp, vertical = 18.dp)
-                    ) {
-                        Checkbox(
-                            checked = firstWindow,
-                            onCheckedChange = null,
-                            modifier = Modifier.size(20.dp),
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = AppTheme.colors.contentAccent.copy(alpha = .8f),
-                                uncheckedColor = AppTheme.colors.contentPrimary.copy(alpha = .3f),
-                                disabledCheckedColor = AppTheme.colors.contentPrimary.copy(alpha = .3f),
-                                disabledUncheckedColor = AppTheme.colors.contentPrimary.copy(alpha = .3f),
-                                checkmarkColor = AppTheme.colors.contentPrimary,
-                                disabledIndeterminateColor = AppTheme.colors.contentPrimary
-                            )
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Text(
-                            text = firstTitle.lowercase(),
-                            color = AppTheme.colors.contentPrimary,
-                            style = AppTheme.typography.radioTitle,
-                            maxLines = 2
-                        )
-                    }
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
-                        modifier = Modifier
-                            .clickableNoRipple {
-                                secondWindow = !secondWindow
-                            }
-                            .weight(1f)
-                            .padding(horizontal = 12.dp, vertical = 12.dp)
-                    ) {
-                        Checkbox(
-                            checked = secondWindow,
-                            onCheckedChange = null,
-                            modifier = Modifier.size(20.dp),
-                            colors = CheckboxDefaults.colors(
-                                checkedColor = AppTheme.colors.contentAccent.copy(alpha = .8f),
-                                uncheckedColor = AppTheme.colors.contentPrimary.copy(alpha = .3f),
-                                disabledCheckedColor = AppTheme.colors.contentPrimary.copy(alpha = .3f),
-                                disabledUncheckedColor = AppTheme.colors.contentPrimary.copy(alpha = .3f),
-                                checkmarkColor = AppTheme.colors.contentPrimary,
-                                disabledIndeterminateColor = AppTheme.colors.contentPrimary
-                            )
-                        )
-                        Spacer(Modifier.width(12.dp))
-                        Text(
-                            text = secondTitle.lowercase(),
-                            color = AppTheme.colors.contentPrimary,
-                            style = AppTheme.typography.radioTitle,
-                            maxLines = 2
-                        )
-                    }
+                    WindowChip(
+                        modifier = Modifier.weight(1f),
+                        title = firstTitle.lowercase(),
+                        checked = firstWindow,
+                        onClick = { firstWindow = !firstWindow }
+                    )
+                    WindowChip(
+                        modifier = Modifier.weight(1f),
+                        title = secondTitle.lowercase(),
+                        checked = secondWindow,
+                        onClick = { secondWindow = !secondWindow }
+                    )
                 }
 
                 val showAutoPlay by remember { derivedStateOf { preSelected?.isMediaApp == true } }
@@ -246,81 +128,90 @@ fun AddReplacementAppDialog(
                     enter = expandVertically(expandFrom = Alignment.Top, animationSpec = tween(200)),
                     exit = shrinkVertically(shrinkTowards = Alignment.Top, animationSpec = tween(200))
                 ) {
-                    Column(modifier = Modifier.fillMaxWidth()) {
-                        Spacer(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(1.dp)
-                                .background(Color.White.copy(.1f))
-                        )
-
-                        RenderSwitcher(
-                            title = stringResource(R.string.autoplay_s),
-                            value = autoPlay,
-                            groupDivider = false
-                        ) {
-                            autoPlay = it
-                        }
+                    RenderSwitcher(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                            .padding(horizontal = DialogTextPadding - SettingsDefaults.RowHorizontalPadding),
+                        title = stringResource(R.string.autoplay_s),
+                        value = autoPlay,
+                        groupDivider = false
+                    ) {
+                        autoPlay = it
                     }
                 }
 
-                Spacer(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(1.dp)
-                        .background(Color.White.copy(.1f))
-                )
+                Spacer(Modifier.height(4.dp))
 
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp, horizontal = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp, Alignment.End)
-                ) {
-                    Text(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .clickable(onClick = onCancel)
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
-                        text = stringResource(android.R.string.cancel).uppercase(),
-                        style = AppTheme.typography.dialogButton,
-                        color = AppTheme.colors.contentAccent
+                DialogButtons {
+                    DialogButton(
+                        text = stringResource(android.R.string.cancel).capitalizeFirstLetter(),
+                        onClick = onCancel
                     )
                     val enableOk by remember { derivedStateOf { (firstWindow || secondWindow) && preSelected != null } }
-                    Text(
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .clickable(enabled = enableOk) {
-                                preSelected?.let {
-                                    // No position
-                                    if (!firstWindow && !secondWindow) {
-                                        onSelect(null)
-                                        return@let
-                                    }
+                    DialogButton(
+                        text = stringResource(android.R.string.ok),
+                        kind = DialogButtonKind.Accent,
+                        enabled = enableOk,
+                        onClick = {
+                            preSelected?.let {
+                                // No position
+                                if (!firstWindow && !secondWindow) {
+                                    onSelect(null)
+                                    return@let
+                                }
 
-                                    onSelect(
-                                        SelectedDialogApp(
-                                            app = it,
-                                            first = firstWindow,
-                                            second = secondWindow,
-                                            autoPlay = if (it.isMediaApp) autoPlay else false
-                                        )
+                                onSelect(
+                                    SelectedDialogApp(
+                                        app = it,
+                                        first = firstWindow,
+                                        second = secondWindow,
+                                        autoPlay = if (it.isMediaApp) autoPlay else false
                                     )
-                                } ?: run { onSelect(null) }
-                                onCancel()
-                            }
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
-                        text = stringResource(android.R.string.ok).uppercase(),
-                        style = AppTheme.typography.dialogButton,
-                        color = if (enableOk) {
-                            AppTheme.colors.contentAccent
-                        } else AppTheme.colors.contentPrimary.copy(.3f)
+                                )
+                            } ?: run { onSelect(null) }
+                            onCancel()
+                        }
                     )
                 }
             }
         }
     }
+}
+
+@Composable
+private fun WindowChip(modifier: Modifier, title: String, checked: Boolean, onClick: () -> Unit) = Row(
+    modifier = modifier
+        .clip(DialogInsetShape)
+        .background(
+            if (checked) {
+                AppTheme.colors.contentAccent.copy(.18f)
+            } else {
+                AppTheme.colors.surfaceLayer1
+            }
+        )
+        .clickable(onClick = onClick)
+        .padding(horizontal = 12.dp, vertical = 14.dp),
+    horizontalArrangement = Arrangement.Center,
+    verticalAlignment = Alignment.CenterVertically
+) {
+    Checkbox(
+        checked = checked,
+        onCheckedChange = null,
+        modifier = Modifier.size(20.dp),
+        colors = CheckboxDefaults.colors(
+            checkedColor = AppTheme.colors.settingsTitleAccent,
+            uncheckedColor = AppTheme.colors.contentPrimary.copy(alpha = .3f),
+            checkmarkColor = AppTheme.colors.surfaceLayer1
+        )
+    )
+    Spacer(Modifier.width(10.dp))
+    Text(
+        text = title,
+        color = if (checked) AppTheme.colors.settingsTitleAccent else AppTheme.colors.contentPrimary,
+        style = AppTheme.typography.radioTitle,
+        maxLines = 2
+    )
 }
 
 @Composable

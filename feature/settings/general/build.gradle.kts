@@ -23,6 +23,7 @@ dependencies {
     implementation(project(Modules.CORE_UI))
     implementation(project(Modules.CORE_UIKIT))
     implementation(project(Modules.CORE_PREFERENCES))
+    implementation(project(Modules.CORE_SPLIT_LAUNCHER))
     implementation(project(Modules.FEATURE_SETTINGS_COMMON))
 
     implementation(libs.androidx.core.ktx)

@@ -35,24 +35,21 @@ class SettingsWindowShiftModeViewModel @Inject constructor(
     init {
         viewModelScope.launch(Dispatchers.IO) {
             launch {
-                val collectedPreferences = flowPrefsUseCase.execute(
+                flowPrefsUseCase.execute(
                     FloatPref.UiScale,
                     IntPref.BottomWindowShiftSize,
                     BoolPref.AutoRefocusWhenBottomWindowShift
-                ).firstOrNull()
-
-                collectedPreferences?.let { prefs ->
+                ).firstOrNull()?.let { prefs ->
                     sendAction(
                         Action.InitPrefs(
                             uiScale = prefs[0] as Float,
                             bottomWindowShiftSize = prefs[1] as Int,
-                            autoRefocusWhenBottomWindowShift = prefs[2] as Boolean,
+                            autoRefocusWhenBottomWindowShift = prefs[2] as Boolean
                         )
                     )
                 }
             }
 
-            // Collect Accessibility Service enabled
             launch {
                 checkAccessibilityServiceEnabledUseCase.flow.collect {
                     sendAction(Action.SetAccessibilityServiceEnabled(it))
@@ -98,7 +95,7 @@ class SettingsWindowShiftModeViewModel @Inject constructor(
         val accessibilityServiceEnabled: Boolean = false,
         val uiScale: Float = DEFAULT_UI_SCALE,
         val bottomWindowShiftSize: Int = DEFAULT_BOTTOM_WINDOW_SHIFT_SIZE,
-        val autoRefocusWhenBottomWindowShift: Boolean? = null,
+        val autoRefocusWhenBottomWindowShift: Boolean? = null
     ) : MviViewState
 
     sealed class Action : MviAction {

@@ -4,9 +4,8 @@ import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
-import androidx.compose.material.ripple.LocalRippleTheme
-import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.LocalContentColor
+import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
@@ -35,14 +34,14 @@ fun AppTheme(
         handleColor = colors.contentAccent,
         backgroundColor = colors.surfaceLayerAccentPale
     )
-    val rippleIndication = rememberRipple()
+    val rippleConfiguration = remember(colors) { appMaterialRippleConfiguration(colors) }
     CompositionLocalProvider(
         LocalAppColors provides colors,
         LocalAppTypography provides typography,
         LocalContentColor provides colors.contentPrimary,
         LocalTextSelectionColors provides textSelectionColors,
-        LocalIndication provides rippleIndication,
-        LocalRippleTheme provides AppRippleTheme,
+        LocalIndication provides AppRipple(colors.isDark),
+        LocalRippleConfiguration provides rippleConfiguration,
         content = content
     )
 }

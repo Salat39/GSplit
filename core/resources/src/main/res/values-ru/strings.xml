@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="delete">Удалить</string>
+    <string name="reset">Сбросить</string>
     <string name="copy_id">Скопировать ID</string>>
     <string name="enable_autorun">Включить автозапуск</string>
     <string name="disable_autorun">Выключить автозапуск</string>
@@ -14,8 +15,19 @@
     <string name="window_overlap_msg">Для работы приложения разрешите ему отображаться поверх других окон. Найдите приложение в списке и включите эту функцию</string>
     <string name="freeform_mode_msg">Для работы приложений в оконном режиме нужно активировать \"Freeform Mode\". Включите «Разрешить создание окон произвольной формы» и «Изменение размера в многооконном режиме». \n\nИли выполните adb команды: \n\"adb shell settings put global enable_freeform_support 1\" и \n\"adb shell settings put global force_resizable_activities 1\"</string>
 
-    <string name="add_first_app">Нажмите здесь, чтобы выбрать первое приложение.</string>
-    <string name="add_second_app">Нажмите здесь, чтобы выбрать второе приложение.</string>
+
+    <string name="free_mode_short">Свободный</string>
+    <plurals name="windows_count">
+        <item quantity="one">%d окно</item>
+        <item quantity="few">%d окна</item>
+        <item quantity="many">%d окон</item>
+        <item quantity="other">%d окна</item>
+    </plurals>
+    <string name="free_mode_hint">Нажмите «Добавить», чтобы разместить первое окно</string>
+    <string name="autoplay_short">Авто</string>
+    <string name="add">Добавить</string>
+    <string name="manual_ratio">Вручную</string>
+    <string name="manual_ratio_hint">Потяните ручку между окнами, чтобы задать их размер</string>
 
     <string name="choosing_an_app">Выбор приложения</string>
     <string name="scanning_installed_apps">Сканирование установленных приложений</string>
@@ -27,8 +39,9 @@
     <string name="enable_dev_mode_guid">Для активации \"Freeform Mode\" включите режим разработчика. Перейдите в раздел «О телефоне», найдите «Номер сборки», нажмите на него 7 раз — появится сообщение, что режим разработчика активирован.</string>
     <string name="enable_dev_mode_car_guid">Для активации \"Freeform Mode\" включите настройки разработчика. Для этого вам необходимо отправить команду: \"adb shell settings put global development_settings_enabled 1\"</string>
     <string name="about_phone">О телефоне</string>
-    <string name="gsplit_preset">GSplit пресет</string>
+    <string name="launch_preset">Действие пресета</string>
     <string name="select_an_preset">Выберите пресет</string>
+    <string name="preset_panel">Панель пресетов</string>
 
     <string name="system_bar_compensator_title">Компенсация системных панелей</string>
     <string name="system_bar_compensator_desc">Добавляет отступы отображения окон с учётом \"Status Bar\" и \"Navigation Bar\". Переключите, если нижнее окно выходит за нижние границы экрана</string>
@@ -43,14 +56,14 @@
     <string name="bottom_window_shift_size_title">Размер сдвига нижнего окна</string>
     <string name="bottom_window_shift_size_desc">Размер в пикселях, определяющий, на сколько нижнее окно сплита будет перекрывать верхнее окно при включённой опции \"Сдвиг окна\".</string>
 
-    <string name="context_adaptive_window_title">Контекстно-адаптивный расчёт размеров окон</string>
-    <string name="context_adaptive_window_desc">Использует современные API при их поддержке на устройстве. Умеет учитывать вырезы экранов и динамические отступы. Однако на старых версиях Android может некорректно рассчитывать размеры</string>
 
     <string name="autostart_minimize_delay_title">Задержка сворачивания после автозапуска пресета</string>
     <string name="autostart_minimize_delay_desc">Включите, если окна некорректно стартуют после автозапуска или видно анимацию сворачивания при старте. В основном может потребоваться для Android 12 и выше</string>
 
     <string name="exp_native_split_title">Экспериментальная нативная реализация разделения</string>
     <string name="exp_native_split_desc">Запуск разделения через Accessibility API. Совместимо с Android 9 и выше. В автомобильных прошивках некоторые необходимые сервисы для запуска могут быть недоступны.</string>
+    <string name="no_caption_windows_title">Окна без верхней панели</string>
+    <string name="no_caption_windows_desc">Убирает у окон верхнюю панель с кнопками. Нужен подключённый ADB-помощник. Минус: при запуске окно может на мгновение мелькнуть. Экспериментальная функция.</string>
 
     <string name="autoplay">Автостарт воспроизведения</string>
     <string name="autoplay_s">Автовоспроизведение</string>
@@ -75,6 +88,12 @@
 
     <string name="self_autostart_delay_title">Пауза автозагрузки приложения</string>
     <string name="self_autostart_delay_desc">Запуск GSplit при включении устройства имеет высокий приоритет загрузки. Добавьте задержку, если хотите отложить запуск, чтобы дать другим приложениям загрузиться первыми.</string>
+
+    <string name="self_autostart_after_pause_group">Автозапуск после паузы</string>
+    <string name="self_autostart_after_pause_title">Перезапуск после сна устройства</string>
+    <string name="self_autostart_after_pause_desc">Если устройство спало или экран был выключен дольше минимальной паузы, а окна сплита пропали, пресет автозапуска запускается заново.</string>
+    <string name="self_autostart_pause_threshold_title">Минимальная пауза</string>
+    <string name="self_autostart_pause_threshold_desc">Более короткие паузы игнорируются, и не инициируют автозапуск.</string>
 
     <string name="launch_scheduler_title">Планировщик запуска</string>
     <string name="launch_scheduler_desc">Запланировать запуск других приложений до или после автозагрузки сплита, выполняемой после включения устройства.</string>
@@ -125,6 +144,8 @@
     <string name="settings">Настройки</string>
     <string name="general_behavior">Общее поведение</string>
     <string name="other">Другое</string>
+    <string name="advanced_settings">Дополнительные настройки</string>
+    <string name="advanced_settings_summary">Задержки запуска окон, автостарт воспроизведения, корректировка высоты окон и другое</string>
 
     <string name="modes">Режимы</string>
     <string name="window_shift">Сдвиг окна</string>
@@ -212,13 +233,14 @@
     <string name="action_overlay_pin">Закрепить</string>
     <string name="action_overlay_pin_description">Запрещает перетаскивать оверлей по экрану</string>
 
-    <string name="standby_mode">Режим ожидания</string>
-    <string name="standby_mode_description">Если вы переключитесь на полноэкранное приложение из режима разделённого экрана, через некоторое время сервис обнаружения окон на экране перейдёт в режим ожидания. При возвращении в разделённый экран оверлеи не отобразятся, а тёмный экран не закроется автоматически. Сервис возобновит работу, когда вы запустите новый сплит.</string>
     <string name="confirm_reset_overlay_position">Вы действительно хотите сбросить позицию оверлея?</string>
     <string name="app_names_for_windows">Названия приложений для окон</string>
     <string name="app_names_for_presets">Названия приложений для пресетов</string>
     <string name="last_launched">Последний запущенный</string>
     <string name="last_launched_split">Последний запущенный сплит</string>
+    <string name="last_launched_shortcut_hint">Ярлык всегда откроет последний сплит</string>
+    <string name="preset_panel_shortcut_hint">Ярлык откроет список пресетов для выбора</string>
+    <string name="last_launched_panel_hint">Запустить сплит, открытый последним</string>
     <string name="launch_history">История запусков</string>
     <string name="show_last_launched_split">Отображать последний запущенный сплит</string>
     <string name="display_last_launched_split">Отображать последнюю запущенную конфигурацию сплита в списке пресетов на главном экране</string>
@@ -226,7 +248,7 @@
     <string name="contrast_border_desc">Более заметная рамка вокруг элемента последнего запущенного сплита</string>
 
     <string name="adb_features">ADB &amp; Telnet</string>
-    <string name="adb_features_description">Параметры связанные с исполнением вспомогательных shell команд</string>
+    <string name="adb_features_description">Часть функций работает полноценно только через ADB. Подключите его, чтобы использовать все возможности приложения</string>
     <string name="adb_helper">ADB-помощник</string>
     <string name="adb_helper_description">Разблокирует функции связанные с выполнением ADB команд</string>
     <string name="force_kill_app_title">Принудительная остановка приложений перед запуском в окнах</string>
@@ -240,23 +262,24 @@
     <string name="your_car">Модель</string>
     <string name="do_not_use">Не использовать</string>
     <string name="adb_overlay_features">Функции оверлеев через ADB</string>
-    <string name="adb_overlay_features_desc">Прямое закрытие окон сплита через оверлей закрытия. Прямое переключение приложений через оверлей быстрой замены окон. Более быстрый, надежный, и простой способ работы функций оверлеев.</string>
     <string name="connection">Подключение</string>
-    <string name="direct_window_control">Прямое управление окнами</string>
     <string name="new_version_available">Доступна новая версия</string>
     <string name="details">Подробнее</string>
     <string name="download">Скачать</string>
     <string name="data_fetch_failed">Не удалось получить данные. Проверьте интернет</string>
     <string name="off">Выкл.</string>
     <string name="enter_your_port">Введите свой номер порта</string>
+    <string name="quick_setup">Быстрая настройка</string>
+    <string name="quick_setup_desc">Подключите ADB, и приложение само быстро настроит систему для работы. Кроме того, с подключённым ADB станут доступны дополнительные функции, а сплиты и управление окнами будут работать надёжнее.</string>
+    <string name="skip_step">Пропустить шаг</string>
 
     <string name="_import">Импорт</string>
-    <string name="import_data_prompt">Вы хотите импортировать эти данные?</string>
-    <string name="import_export_settings">Импорт и экспорт настроек</string>
-    <string name="import_settings">Импорт настроек</string>
-    <string name="import_settings_desc">Выберите файл для импорта настроек. Вы также можете открыть файл непосредственно в системе, выбрав программу GSplit. Обратите внимание: после импорта все текущие настройки будут заменены</string>
-    <string name="export_settings">Экспорт настроек</string>
-    <string name="export_settings_desc">Создать резервную копию настроек, за исключением выбранных медиаприложений и плеера по умолчанию</string>
+    <string name="import_data_prompt">Импортировать пресеты и настройки из этого файла? Текущие будут заменены.</string>
+    <string name="import_export_settings">Резервная копия пресетов и настроек</string>
+    <string name="import_settings">Импорт пресетов и настроек</string>
+    <string name="import_settings_desc">Восстанавливает пресеты и настройки из файла резервной копии и заменяет текущие. Файл также можно открыть через GSplit из любого файлового менеджера</string>
+    <string name="export_settings">Экспорт пресетов и настроек</string>
+    <string name="export_settings_desc">Сохраняет все пресеты и настройки приложения в файл резервной копии</string>
 
     <string name="about_text"><![CDATA[<strong>Контакты:</strong><br>email: <a href="#email">%1$s</a>&#10240;<br>tg: <a href="#tg">%2$s</a>&#10240;]]></string>
     <string name="api_text"><![CDATA[<strong>Получение текущего состояния сплита</strong>
@@ -330,5 +353,27 @@
 <br>
 Параметры: first_package, second_package, first_auto_play:[0|1], second_auto_play:[0|1], type:[1x1|2x1|…], dark_background:[0|1], window_shift:[0|1]
 <br>
-Запускает сплит по указанной конфигурации.]]></string>
+Запускает сплит по указанной конфигурации.
+<br>
+<br>
+<strong>Действие 7</strong>: \"com.salat.gsplit.FREE_LAUNCH\"
+<br>
+Параметры: package, x:[0..100], y:[0..100], width:[1..100], height:[1..100], auto_play:[0|1], pin:[0|1]
+<br>
+Запускает приложение в свободном окне. Позиция и размер задаются в процентах от области экрана между статус-баром и панелью навигации. Закреплённое окно остаётся поверх других окон. Закрывает текущий сплит, если он открыт.
+<br>
+<br>
+<strong>Действие 8</strong>: \"com.salat.gsplit.TOGGLE_PRESET_PANEL\"
+<br>
+Открывает панель пресетов, как ярлык панели. Закрывает панель, если она уже открыта.]]></string>
+    <string name="search_apps">Поиск приложения</string>
+    <string name="nothing_found">Ничего не найдено</string>
+    <string name="choose_app">Выбрать приложение</string>
+    <string name="tap_to_choose">Нажмите, чтобы выбрать</string>
+    <string name="save">Сохранить</string>
+    <string name="swap_windows">Поменять окна местами</string>
+    <string name="reorder_presets">Изменить порядок</string>
+    <string name="preset_order">Порядок пресетов</string>
+    <string name="done">Готово</string>
+    <string name="reorder_hint">Перетащите пресет за ручку справа</string>
 </resources>

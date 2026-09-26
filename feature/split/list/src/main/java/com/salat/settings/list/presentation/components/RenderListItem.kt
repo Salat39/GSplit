@@ -1,14 +1,21 @@
 package com.salat.settings.list.presentation.components
 
+import androidx.annotation.StringRes
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,22 +26,22 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.ripple.rememberRipple
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onGloballyPositioned
@@ -43,102 +50,99 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.salat.resources.R
+import com.salat.settings.list.presentation.entity.DisplayAppPreset
 import com.salat.settings.list.presentation.entity.DisplayPresetType
 import com.salat.settings.list.presentation.entity.DisplaySplitPreset
 import com.salat.settings.list.presentation.entity.RenderListType
+import com.salat.ui.rememberIsLandscape
 import com.salat.ui.rememberPainterResource
 import com.salat.ui.rememberTimeLockedBoolean
+import com.salat.ui.splitRatioLabel
+import com.salat.uikit.component.RatioGlyph
 import com.salat.uikit.theme.AppTheme
+import kotlin.math.PI
+import kotlin.math.sin
+import kotlinx.coroutines.launch
 
-private const val AUTO_START_BORDER = 2
-private const val ICON_SIZE = 28
+private val CardShape = RoundedCornerShape(20.dp)
+private val CardHorizontalPadding = 16.dp
+private val CardVerticalPadding = 14.dp
+private val ItemGap = 5.dp
+private val FrameWidth = 2.dp
+private val RegularIconSize = 40.dp
+private val CompactIconSize = 32.dp
+private val CompactRowWidth = 480.dp
+private val IconTextGap = 12.dp
+private val RatioColumnPadding = 12.dp
+private val LiftElevation = 12.dp
+private val LiftBorderWidth = 1.5.dp
+private val NudgeAmplitude = 4.dp
+private const val NUDGE_DURATION_MILLIS = 450
+
+private data class CardFrame(
+    val color: Color,
+    @StringRes val titleRes: Int,
+    val titleAtTop: Boolean
+)
 
 @Composable
 internal fun RenderListItem(
     modifier: Modifier,
     preset: DisplaySplitPreset,
     type: RenderListType,
+    showWindowShift: Boolean = true,
+    dragHandle: Modifier? = null,
+    lifted: Boolean = false,
     onClick: () -> Unit,
     onLongClick: (item: DisplaySplitPreset, offset: Offset) -> Unit
 ) {
     var rootOffsetX by remember { mutableFloatStateOf(0f) }
     var rootOffsetY by remember { mutableFloatStateOf(0f) }
 
-    val context = LocalContext.current
     var clickLock by rememberTimeLockedBoolean(1000L)
     val interactionSource = remember { MutableInteractionSource() }
-    val rippleIndication = rememberRipple()
-    val borderColor = when (type) {
-        RenderListType.PRESET -> AppTheme.colors.autoStart
-        RenderListType.HISTORY -> AppTheme.colors.historyBorder
-        RenderListType.HISTORY_CONTRAST -> AppTheme.colors.historyAccentBorder
-    }
-    val showBorder = when (type) {
-        RenderListType.PRESET -> preset.autoStart
-        RenderListType.HISTORY, RenderListType.HISTORY_CONTRAST -> true
-    }
-    Card(
+    val rippleIndication = LocalIndication.current
+    val frame = cardFrame(type, preset.autoStart)
+    val reorderMode = dragHandle != null
+    val scope = rememberCoroutineScope()
+    val handleNudge = remember { Animatable(0f) }
+
+    Column(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(12.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (showBorder) {
-                borderColor
-            } else {
-                AppTheme.colors.cardItemBackground
-            }
-        )
+            .padding(horizontal = CardHorizontalPadding, vertical = ItemGap)
+            .then(
+                if (lifted) {
+                    Modifier
+                        .shadow(LiftElevation, CardShape)
+                        .border(LiftBorderWidth, AppTheme.colors.contentAccent, CardShape)
+                } else Modifier
+            )
+            .then(frame?.let { Modifier.clip(CardShape).background(it.color) } ?: Modifier)
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            if (showBorder) {
-                when (type) {
-                    RenderListType.PRESET -> Spacer(Modifier.height(AUTO_START_BORDER.dp))
+        frame?.let { CardFrameEdge(frame = it, isTop = true) }
 
-                    RenderListType.HISTORY, RenderListType.HISTORY_CONTRAST -> {
-                        Text(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .background(borderColor),
-                            text = stringResource(R.string.last_launched_split),
-                            style = AppTheme.typography.dialogSubtitle,
-                            color = AppTheme.colors.contentPrimary,
-                            textAlign = TextAlign.Center
-                        )
-                    }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(if (frame != null) Modifier.padding(horizontal = FrameWidth) else Modifier)
+                .heightIn(min = 64.dp)
+                .clip(CardShape)
+                .background(AppTheme.colors.surfaceSettingsLayer1)
+                .onGloballyPositioned { coordinates ->
+                    rootOffsetX = coordinates.positionInRoot().x
+                    rootOffsetY = coordinates.positionInRoot().y
                 }
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(
-                        if (showBorder) {
-                            Modifier.padding(horizontal = AUTO_START_BORDER.dp)
-                        } else Modifier
-                    )
-                    .heightIn(min = 64.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(AppTheme.colors.cardItemBackground)
-                    .onGloballyPositioned { coordinates ->
-                        rootOffsetX = coordinates.positionInRoot().x
-                        rootOffsetY = coordinates.positionInRoot().y
-                    }
-                    .indication(interactionSource, rippleIndication)
-                    .pointerInput(
-                        preset.firstApp.packageName,
-                        preset.secondApp.packageName,
-                        preset.autoStart,
-                        preset.darkBackground,
-                        preset.bottomWindowShift,
-                        preset.quickAccess
-                    ) {
+                .indication(interactionSource, rippleIndication)
+                .pointerInput(preset, reorderMode) {
+                    if (reorderMode) {
+                        detectTapGestures(onTap = { scope.launch { handleNudge.nudge() } })
+                    } else {
                         detectTapGestures(
                             onPress = { offset ->
                                 val press = PressInteraction.Press(offset)
@@ -150,13 +154,7 @@ internal fun RenderListItem(
                                 }
                             },
                             onLongPress = {
-                                onLongClick(
-                                    preset,
-                                    Offset(
-                                        x = it.x + rootOffsetX,
-                                        y = it.y + rootOffsetY
-                                    )
-                                )
+                                onLongClick(preset, Offset(x = it.x + rootOffsetX, y = it.y + rootOffsetY))
                             },
                             onTap = {
                                 if (!clickLock) {
@@ -166,204 +164,233 @@ internal fun RenderListItem(
                             }
                         )
                     }
-                    .then(
-                        if (showBorder) {
-                            Modifier.padding(horizontal = (16 - AUTO_START_BORDER).dp, vertical = 16.dp)
-                        } else Modifier.padding(16.dp)
-                    ),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(ICON_SIZE.dp),
-                    contentAlignment = Alignment.BottomEnd
-                ) {
-                    preset.firstApp.icon?.let {
-                        AsyncImage(
-                            modifier = Modifier
-                                .size(ICON_SIZE.dp)
-                                .clip(RoundedCornerShape(6.dp)),
-                            model = remember(preset.firstApp.packageName) {
-                                ImageRequest.Builder(context)
-                                    .data(it)
-                                    .build()
-                            },
-                            contentDescription = "firstAppIcon",
-                            contentScale = ContentScale.Fit
-                        )
-                    }
-
-                    if (preset.firstApp.autoPlay == true) {
-                        Icon(
-                            modifier = Modifier
-                                .offset(x = 3.dp, y = 3.dp)
-                                .alpha(.9f)
-                                .size(16.dp)
-                                .clip(CircleShape)
-                                .background(AppTheme.colors.contentAccent)
-                                .padding(3.5.dp),
-                            painter = rememberPainterResource(R.drawable.ic_play),
-                            contentDescription = "",
-                            tint = Color.White
-                        )
-                    }
                 }
-
-                Spacer(Modifier.width(10.dp))
-
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        text = preset.firstApp.title,
-                        style = AppTheme.typography.cardTitle,
-                        overflow = TextOverflow.Ellipsis,
-                        maxLines = 1,
-                        color = if (preset.firstApp.autoPlay == true) {
-                            AppTheme.colors.contentLightAccent
-                        } else AppTheme.colors.contentPrimary
-                    )
-                    Text(
-                        text = preset.firstApp.packageName,
-                        style = AppTheme.typography.dialogSubtitle,
-                        overflow = TextOverflow.Ellipsis,
-                        maxLines = 1,
-                        color = AppTheme.colors.contentPrimary.copy(.5f)
-                    )
-                }
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        text = when (preset.type) {
-                            DisplayPresetType.HALF -> "1x1"
-                            DisplayPresetType.ONE_TO_THREE -> "1x2"
-                            DisplayPresetType.TWO_TO_THREE -> "2x1"
-                            DisplayPresetType.THREE_TO_FOUR -> "3x4"
-                            DisplayPresetType.THREE_TO_TWO -> "3x2"
-                            DisplayPresetType.FOUR_TO_THREE -> "4x3"
-                        },
-                        textAlign = TextAlign.Center,
-                        style = AppTheme.typography.cardFormatTitle,
-                        color = AppTheme.colors.contentPrimary
-                    )
-                    if (preset.darkBackground || preset.bottomWindowShift || preset.quickAccess) {
-                        Spacer(Modifier.height(3.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                            if (preset.darkBackground) {
-                                Icon(
-                                    modifier = Modifier
-                                        .size(12.dp),
-                                    painter = rememberPainterResource(R.drawable.ic_moon),
-                                    contentDescription = null,
-                                    tint = AppTheme.colors.contentPrimary
-                                )
-                            }
-
-                            if (preset.bottomWindowShift) {
-                                Icon(
-                                    modifier = Modifier
-                                        .size(12.5.dp),
-                                    painter = rememberPainterResource(R.drawable.ic_lift),
-                                    contentDescription = null,
-                                    tint = AppTheme.colors.contentPrimary
-                                )
-                            }
-
-                            if (preset.quickAccess) {
-                                Icon(
-                                    modifier = Modifier
-                                        .size(12.5.dp),
-                                    painter = rememberPainterResource(R.drawable.ic_star),
-                                    contentDescription = null,
-                                    tint = AppTheme.colors.contentPrimary
-                                )
-                            }
-                        }
-                    }
-                }
-
-                Column(
-                    modifier = Modifier.weight(1f),
-                    horizontalAlignment = Alignment.End
-                ) {
-                    Text(
-                        text = preset.secondApp.title,
-                        style = AppTheme.typography.cardTitle,
-                        overflow = TextOverflow.Ellipsis,
-                        maxLines = 1,
-                        textAlign = TextAlign.End,
-                        color = if (preset.secondApp.autoPlay == true) {
-                            AppTheme.colors.contentLightAccent
-                        } else AppTheme.colors.contentPrimary
-                    )
-                    Text(
-                        text = preset.secondApp.packageName,
-                        style = AppTheme.typography.dialogSubtitle,
-                        overflow = TextOverflow.Ellipsis,
-                        maxLines = 1,
-                        color = AppTheme.colors.contentPrimary.copy(.5f)
-                    )
-                }
-
-                Spacer(Modifier.width(10.dp))
-
-                Box(
-                    modifier = Modifier
-                        .size(ICON_SIZE.dp),
-                    contentAlignment = Alignment.BottomStart
-                ) {
-                    preset.secondApp.icon?.let {
-                        AsyncImage(
-                            modifier = Modifier
-                                .size(ICON_SIZE.dp)
-                                .clip(RoundedCornerShape(6.dp)),
-                            model = remember(preset.secondApp.packageName) {
-                                ImageRequest.Builder(context)
-                                    .data(it)
-                                    .build()
-                            },
-                            contentDescription = "secondAppIcon",
-                            contentScale = ContentScale.Fit
-                        )
-                    }
-
-                    if (preset.secondApp.autoPlay == true) {
-                        Icon(
-                            modifier = Modifier
-                                .offset(x = (-3).dp, y = 3.dp)
-                                .alpha(.9f)
-                                .size(16.dp)
-                                .clip(CircleShape)
-                                .background(AppTheme.colors.contentAccent)
-                                .padding(3.5.dp),
-                            painter = rememberPainterResource(R.drawable.ic_play),
-                            contentDescription = "",
-                            tint = Color.White
-                        )
-                    }
-                }
+                .padding(
+                    horizontal = if (frame != null) CardHorizontalPadding - FrameWidth else CardHorizontalPadding,
+                    vertical = CardVerticalPadding
+                ),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (preset.type == DisplayPresetType.FREE) {
+                FreePresetContent(preset = preset, modifier = Modifier.weight(1f))
+            } else {
+                SplitPresetContent(preset = preset, showWindowShift = showWindowShift)
             }
 
-            if (showBorder) {
-                when (type) {
-                    RenderListType.PRESET -> {
-                        Text(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 4.dp)
-                                .background(borderColor),
-                            text = stringResource(R.string.runs_on_app_startup),
-                            style = AppTheme.typography.dialogSubtitle,
-                            color = AppTheme.colors.contentPrimary,
-                            textAlign = TextAlign.Center
-                        )
-                    }
+            dragHandle?.let { DragHandle(modifier = it, nudge = handleNudge, lifted = lifted) }
+        }
 
-                    RenderListType.HISTORY, RenderListType.HISTORY_CONTRAST ->
-                        Spacer(Modifier.height(AUTO_START_BORDER.dp))
-                }
-            }
+        frame?.let { CardFrameEdge(frame = it, isTop = false) }
+    }
+}
+
+@Composable
+private fun DragHandle(modifier: Modifier, nudge: Animatable<Float, *>, lifted: Boolean) = Box(
+    modifier = modifier
+        .padding(start = 8.dp)
+        .size(width = 40.dp, height = 48.dp)
+        .graphicsLayer { translationX = nudgeShift(nudge.value) * NudgeAmplitude.toPx() },
+    contentAlignment = Alignment.Center
+) {
+    Icon(
+        painter = rememberPainterResource(R.drawable.ic_drag_grip),
+        contentDescription = stringResource(R.string.reorder_presets),
+        tint = AppTheme.colors.contentPrimary.copy(if (lifted) 1f else .55f),
+        modifier = Modifier.size(24.dp)
+    )
+}
+
+private suspend fun Animatable<Float, *>.nudge() {
+    snapTo(0f)
+    animateTo(1f, tween(NUDGE_DURATION_MILLIS))
+    snapTo(0f)
+}
+
+// Decaying wave for a short side shake
+private fun nudgeShift(progress: Float) = sin(progress * 3 * PI.toFloat()) * (1 - progress)
+
+@Composable
+private fun cardFrame(type: RenderListType, autoStart: Boolean) = when (type) {
+    RenderListType.PRESET -> if (autoStart) {
+        CardFrame(
+            color = AppTheme.colors.autoStart,
+            titleRes = R.string.runs_on_app_startup,
+            titleAtTop = false
+        )
+    } else {
+        null
+    }
+
+    RenderListType.HISTORY -> CardFrame(
+        color = AppTheme.colors.historyBorder,
+        titleRes = R.string.last_launched_split,
+        titleAtTop = true
+    )
+
+    RenderListType.HISTORY_CONTRAST -> CardFrame(
+        color = AppTheme.colors.historyAccentBorder,
+        titleRes = R.string.last_launched_split,
+        titleAtTop = true
+    )
+}
+
+@Composable
+private fun CardFrameEdge(frame: CardFrame, isTop: Boolean) {
+    if (frame.titleAtTop == isTop) {
+        Text(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            text = stringResource(frame.titleRes),
+            style = AppTheme.typography.dialogSubtitle,
+            color = AppTheme.colors.contentPrimary,
+            textAlign = TextAlign.Center
+        )
+    } else {
+        Spacer(Modifier.height(FrameWidth))
+    }
+}
+
+@Composable
+private fun RowScope.SplitPresetContent(preset: DisplaySplitPreset, showWindowShift: Boolean) = BoxWithConstraints(
+    modifier = Modifier.weight(1f)
+) {
+    val iconSize = if (maxWidth < CompactRowWidth) CompactIconSize else RegularIconSize
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        AppIcon(app = preset.firstApp, size = iconSize, playBadgeAtEnd = true)
+
+        Spacer(Modifier.width(IconTextGap))
+
+        AppTexts(app = preset.firstApp, alignEnd = false, modifier = Modifier.weight(1f))
+
+        RatioColumn(
+            preset = preset,
+            showWindowShift = showWindowShift,
+            modifier = Modifier.padding(horizontal = RatioColumnPadding)
+        )
+
+        AppTexts(app = preset.secondApp, alignEnd = true, modifier = Modifier.weight(1f))
+
+        Spacer(Modifier.width(IconTextGap))
+
+        AppIcon(app = preset.secondApp, size = iconSize, playBadgeAtEnd = false)
+    }
+}
+
+@Composable
+private fun AppIcon(app: DisplayAppPreset, size: Dp, playBadgeAtEnd: Boolean) = Box(
+    modifier = Modifier.size(size),
+    contentAlignment = if (playBadgeAtEnd) Alignment.BottomEnd else Alignment.BottomStart
+) {
+    val context = LocalContext.current
+    app.icon?.let {
+        AsyncImage(
+            modifier = Modifier
+                .size(size)
+                .clip(RoundedCornerShape(size * .22f)),
+            model = remember(app.packageName) {
+                ImageRequest.Builder(context)
+                    .data(it)
+                    .build()
+            },
+            contentDescription = null,
+            contentScale = ContentScale.Fit
+        )
+    }
+
+    if (app.autoPlay == true) {
+        Icon(
+            modifier = Modifier
+                .offset(x = if (playBadgeAtEnd) 4.dp else (-4).dp, y = 4.dp)
+                .size(18.dp)
+                .clip(CircleShape)
+                .background(AppTheme.colors.surfaceSettingsLayer1)
+                .padding(2.dp)
+                .clip(CircleShape)
+                .background(AppTheme.colors.contentAccent)
+                .padding(3.dp),
+            painter = rememberPainterResource(R.drawable.ic_play),
+            contentDescription = null,
+            tint = Color.White
+        )
+    }
+}
+
+@Composable
+private fun AppTexts(app: DisplayAppPreset, alignEnd: Boolean, modifier: Modifier) = Column(
+    modifier = modifier,
+    horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start
+) {
+    Text(
+        text = app.title,
+        style = AppTheme.typography.cardTitle,
+        overflow = TextOverflow.Ellipsis,
+        maxLines = 1,
+        textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
+        color = AppTheme.colors.contentPrimary
+    )
+    Text(
+        text = app.packageName,
+        style = AppTheme.typography.dialogSubtitle,
+        overflow = TextOverflow.Ellipsis,
+        maxLines = 1,
+        color = AppTheme.colors.contentPrimary.copy(.4f)
+    )
+}
+
+@Composable
+private fun RatioColumn(preset: DisplaySplitPreset, showWindowShift: Boolean, modifier: Modifier) = Column(
+    modifier = modifier,
+    horizontalAlignment = Alignment.CenterHorizontally
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        RatioGlyph(
+            firstShare = preset.firstShare(),
+            isLandscape = rememberIsLandscape(),
+            length = 16.dp,
+            modifier = Modifier.alpha(.75f)
+        )
+        Text(
+            text = preset.ratioLabel(),
+            textAlign = TextAlign.Center,
+            style = AppTheme.typography.cardFormatTitle.copy(fontFeatureSettings = "tnum"),
+            color = AppTheme.colors.contentPrimary,
+            maxLines = 1
+        )
+    }
+
+    val windowShift = preset.bottomWindowShift && showWindowShift
+    if (preset.darkBackground || windowShift || preset.quickAccess) {
+        Spacer(Modifier.height(6.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (preset.darkBackground) PresetStatusBadge(R.drawable.ic_moon)
+            if (windowShift) PresetStatusBadge(R.drawable.ic_lift)
+            if (preset.quickAccess) PresetStatusBadge(R.drawable.ic_star)
         }
     }
+}
+
+private fun DisplaySplitPreset.firstShare() = when (type) {
+    DisplayPresetType.HALF -> 1 / 2f
+    DisplayPresetType.ONE_TO_THREE -> 1 / 3f
+    DisplayPresetType.TWO_TO_THREE -> 2 / 3f
+    DisplayPresetType.THREE_TO_FOUR -> 3 / 7f
+    DisplayPresetType.THREE_TO_TWO -> 3 / 5f
+    DisplayPresetType.FOUR_TO_THREE -> 4 / 7f
+    DisplayPresetType.CUSTOM, DisplayPresetType.FREE -> ratio
+}
+
+@Composable
+private fun DisplaySplitPreset.ratioLabel() = when (type) {
+    DisplayPresetType.HALF -> "1x1"
+    DisplayPresetType.ONE_TO_THREE -> "1x2"
+    DisplayPresetType.TWO_TO_THREE -> "2x1"
+    DisplayPresetType.THREE_TO_FOUR -> "3x4"
+    DisplayPresetType.THREE_TO_TWO -> "3x2"
+    DisplayPresetType.FOUR_TO_THREE -> "4x3"
+    DisplayPresetType.FREE -> stringResource(R.string.free_mode_short)
+    DisplayPresetType.CUSTOM -> splitRatioLabel(ratio)
 }

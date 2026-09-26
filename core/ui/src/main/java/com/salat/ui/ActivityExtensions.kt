@@ -8,6 +8,20 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 
+// enableEdgeToEdge overwrites the cutout mode that the theme sets
+fun ComponentActivity.enableEdgeToEdgeKeepCutoutMode(
+    statusBarStyle: SystemBarStyle,
+    navigationBarStyle: SystemBarStyle
+) {
+    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+        enableEdgeToEdge(statusBarStyle, navigationBarStyle)
+        return
+    }
+    val cutoutMode = window.attributes.layoutInDisplayCutoutMode
+    enableEdgeToEdge(statusBarStyle, navigationBarStyle)
+    window.attributes.layoutInDisplayCutoutMode = cutoutMode
+}
+
 fun ComponentActivity.compatEdgeToEdge(statusBar: Color, navigationBar: Color, isDark: Boolean = true) {
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
         if (isDark) {

@@ -6,5 +6,7 @@ enum class LastLaunchedType(val id: Int) {
     TWO_TO_THREE(3),
     THREE_TO_FOUR(4),
     THREE_TO_TWO(5),
-    FOUR_TO_THREE(6)
+    FOUR_TO_THREE(6),
+    FREE(7),
+    CUSTOM(8)
 }

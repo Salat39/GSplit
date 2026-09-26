@@ -19,6 +19,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- android:largeHeap="true" -->
     <application
@@ -41,7 +42,7 @@
             android:label="${applicationLabel}"
             android:launchMode="singleTask"
             android:theme="@style/Theme.GSplit.Starting"
-            android:windowSoftInputMode="stateUnchanged|adjustResize"
+            android:windowSoftInputMode="stateAlwaysHidden|adjustResize"
             tools:ignore="RedundantLabel">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -95,11 +96,27 @@
             android:excludeFromRecents="true"
             android:exported="true"
             android:icon="@mipmap/ic_launcher"
-            android:label="@string/gsplit_preset"
+            android:label="@string/launch_preset"
             android:theme="@style/Theme.TransparentNoSplash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <action android:name="android.intent.action.CREATE_SHORTCUT" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".PresetPanelActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/preset_panel"
+            android:launchMode="singleTask"
+            android:noHistory="true"
+            android:taskAffinity="${applicationId}.presetPanel"
+            android:theme="@style/Theme.TransparentNoSplash">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
@@ -117,7 +134,11 @@
 
         <service
             android:name=".presentation.WakeUpForegroundService"
-            android:foregroundServiceType="mediaPlayback" />
+            android:foregroundServiceType="mediaPlayback|specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Waits for boot conditions and launches the split autostart preset" />
+        </service>
 
         <service
             android:name=".presentation.AutoLaunchAccessibilityService"
@@ -133,7 +154,12 @@
 
         <service
             android:name="com.salat.overlay.presentation.OverlayService"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Floating window controls drawn over other apps" />
+        </service>
 
         <meta-data
             android:name="google_analytics_automatic_screen_reporting_enabled"
@@ -168,6 +194,8 @@
                 <action android:name="com.salat.gsplit.LAUNCH_LAST" />
                 <action android:name="com.salat.gsplit.LAUNCH_AUTOSTART" />
                 <action android:name="com.salat.gsplit.CUSTOM_LAUNCH" />
+                <action android:name="com.salat.gsplit.FREE_LAUNCH" />
+                <action android:name="com.salat.gsplit.TOGGLE_PRESET_PANEL" />
             </intent-filter>
         </receiver>
 

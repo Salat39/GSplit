@@ -36,6 +36,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
@@ -62,6 +64,7 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.salat.overlay.presentation.components.FreePresetMenuItem
 import com.salat.overlay.presentation.entity.DisplayPresetType
 import com.salat.overlay.presentation.entity.DisplayReplacementAppItem
 import com.salat.overlay.presentation.entity.DisplaySplitPreset
@@ -74,12 +77,15 @@ import com.salat.preferences.domain.entity.IntSharedPref
 import com.salat.replacementappsstorage.domain.repository.ReplacementAppStorageRepository
 import com.salat.resources.R
 import com.salat.screenspecs.domain.repository.ScreenSpecsRepository
+import com.salat.splitlauncher.domain.repository.SplitLauncherRepository
 import com.salat.splitpresets.domain.repository.SplitPresetsRepository
 import com.salat.statekeeper.domain.entity.AccessibilityServiceEvent
+import com.salat.statekeeper.domain.entity.LaunchedSplitType
 import com.salat.statekeeper.domain.repository.StateKeeperRepository
 import com.salat.ui.clickableNoRipple
 import com.salat.ui.rememberIsLandscape
 import com.salat.ui.rememberPainterResource
+import com.salat.ui.splitRatioLabel
 import com.salat.uikit.theme.AppTheme
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -112,6 +118,9 @@ class OverlayService : Service() {
 
     @Inject
     lateinit var splitPresets: SplitPresetsRepository
+
+    @Inject
+    lateinit var splitLauncher: SplitLauncherRepository
 
     private lateinit var windowManager: WindowManager
 
@@ -313,38 +322,53 @@ class OverlayService : Service() {
                         )
                     }
                     val scope = rememberCoroutineScope()
+                    val launchedWindows by stateKeeper.launchedWindows.collectAsState()
+                    val presets by splitPresets.presetsFlow.collectAsState()
+                    val quickAccessPresets = remember(presets) { presets.filter { it.quickAccess } }
+                    val isFreeSplit = launchedWindows?.type == LaunchedSplitType.FREE
 
                     fun onReplace() {
                         scope.launch {
-                            val items = replacementApps.getReplacementApps().toDisplay()
-                            val presets = splitPresets.getPresets().filter { it.quickAccess }.toDisplayPreset()
+                            // Free split - replace only the whole preset, not a single window
+                            val items = if (isFreeSplit) {
+                                emptyList()
+                            } else {
+                                replacementApps.getReplacementApps().toDisplay()
+                            }
 
                             // show menu overlay
-                            showMenuOverlay(items, presets, replaceOverlayAppNames, replaceOverlayPresetNames)
+                            showMenuOverlay(
+                                items,
+                                quickAccessPresets.toDisplayPreset(),
+                                replaceOverlayAppNames,
+                                replaceOverlayPresetNames
+                            )
                         }
                     }
-                    AppTheme {
-                        CompositionLocalProvider(
-                            LocalDensity provides scaledDensity,
-                            LocalLayoutDirection provides LayoutDirection.Ltr
-                        ) {
-                            Box(
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .clickableNoRipple(onClick = ::onReplace)
-                                    .background(Color.Black.copy(replaceOverlayBgAlpha))
-                                    .padding(20.dp),
-                                contentAlignment = Alignment.Center
+                    if (!isFreeSplit || quickAccessPresets.isNotEmpty()) {
+                        AppTheme {
+                            CompositionLocalProvider(
+                                LocalDensity provides scaledDensity,
+                                LocalLayoutDirection provides LayoutDirection.Ltr
                             ) {
-                                Icon(
+                                Box(
                                     modifier = Modifier
-                                        .alpha(replaceOverlayIconAlpha)
-                                        .scale(scaleX = -1f, scaleY = 1f)
-                                        .size(30.dp),
-                                    painter = rememberPainterResource(R.drawable.ic_switch7),
-                                    tint = Color.White,
-                                    contentDescription = null
-                                )
+                                        .clip(CircleShape)
+                                        .clickableNoRipple(onClick = ::onReplace)
+                                        .background(Color.Black.copy(replaceOverlayBgAlpha))
+                                        .padding(20.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        modifier = Modifier
+                                            .alpha(replaceOverlayIconAlpha)
+                                            .scale(scaleX = -1f, scaleY = 1f)
+                                            .size(30.dp),
+                                        painter = rememberPainterResource(R.drawable.ic_switch7),
+                                        tint = Color.White,
+                                        contentDescription = null
+                                    )
+                                }
                             }
                         }
                     }
@@ -645,6 +669,7 @@ class OverlayService : Service() {
         presetsNames: Boolean,
         onClick: (DisplaySplitPreset) -> Unit
     ) {
+        val noCaptionWindows by splitLauncher.noCaptionWindowsFlow.collectAsState()
         Spacer(Modifier.height(8.dp))
         Text(
             text = stringResource(R.string.presets),
@@ -658,143 +683,149 @@ class OverlayService : Service() {
             verticalArrangement = Arrangement.spacedBy(REPLACEMENT_MENU_VERTICAL_ARRANGEMENT.dp)
         ) {
             items.forEach { item ->
-
-                Row(
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(Color.White.copy(.06f))
-                        .padding(horizontal = 12.dp, vertical = 10.dp)
-                        .clickableNoRipple { onClick(item) },
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.width(48.dp)
+                if (item.type == DisplayPresetType.FREE) {
+                    FreePresetMenuItem(item, presetsNames, onClick)
+                } else {
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color.White.copy(.06f))
+                            .padding(horizontal = 12.dp, vertical = 10.dp)
+                            .clickableNoRipple { onClick(item) },
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box {
-                            val context = LocalContext.current
-                            AsyncImage(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(RoundedCornerShape(6.dp)),
-                                model = ImageRequest.Builder(context).data(item.firstApp.icon).build(),
-                                contentDescription = item.firstApp.title,
-                                contentScale = ContentScale.Fit
-                            )
-
-                            if (item.firstApp.autoPlay == true) {
-                                Icon(
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.width(48.dp)
+                        ) {
+                            Box {
+                                val context = LocalContext.current
+                                AsyncImage(
                                     modifier = Modifier
-                                        .align(Alignment.BottomEnd)
-                                        .offset(x = 2.dp, y = 2.dp)
-                                        .alpha(.9f)
-                                        .size(22.dp)
-                                        .clip(CircleShape)
-                                        .background(AppTheme.colors.contentAccent)
-                                        .padding(5.dp),
-                                    painter =
-                                    rememberPainterResource(R.drawable.ic_play),
-                                    contentDescription = "",
-                                    tint = Color.White
+                                        .size(48.dp)
+                                        .clip(RoundedCornerShape(6.dp)),
+                                    model = ImageRequest.Builder(context).data(item.firstApp.icon).build(),
+                                    contentDescription = item.firstApp.title,
+                                    contentScale = ContentScale.Fit
                                 )
-                            }
-                        }
-                        if (presetsNames) {
-                            Spacer(Modifier.height(REPLACEMENT_MENU_ICON_TO_TITLE_SPACE.dp))
-                            Text(
-                                text = item.firstApp.title,
-                                maxLines = 1,
-                                style = AppTheme.typography.aboutText,
-                                color = AppTheme.colors.contentPrimary,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
 
-                    Column(
-                        modifier = Modifier.padding(horizontal = 10.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = when (item.type) {
-                                DisplayPresetType.HALF -> "1x1"
-                                DisplayPresetType.ONE_TO_THREE -> "1x2"
-                                DisplayPresetType.TWO_TO_THREE -> "2x1"
-                                DisplayPresetType.THREE_TO_FOUR -> "3x4"
-                                DisplayPresetType.THREE_TO_TWO -> "3x2"
-                                DisplayPresetType.FOUR_TO_THREE -> "4x3"
-                            },
-                            textAlign = TextAlign.Center,
-                            style = AppTheme.typography.dialogListTitle,
-                            color = AppTheme.colors.contentPrimary
-                        )
-                        if (item.darkBackground || item.bottomWindowShift) {
-                            Spacer(Modifier.height(3.dp))
-                            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                                if (item.darkBackground) {
+                                if (item.firstApp.autoPlay == true) {
                                     Icon(
                                         modifier = Modifier
-                                            .size(12.dp),
-                                        painter = rememberPainterResource(R.drawable.ic_moon),
-                                        contentDescription = null,
-                                        tint = AppTheme.colors.contentPrimary
-                                    )
-                                }
-
-                                if (item.bottomWindowShift) {
-                                    Icon(
-                                        modifier = Modifier
-                                            .size(12.5.dp),
-                                        painter = rememberPainterResource(R.drawable.ic_lift),
-                                        contentDescription = null,
-                                        tint = AppTheme.colors.contentPrimary
+                                            .align(Alignment.BottomEnd)
+                                            .offset(x = 2.dp, y = 2.dp)
+                                            .alpha(.9f)
+                                            .size(22.dp)
+                                            .clip(CircleShape)
+                                            .background(AppTheme.colors.contentAccent)
+                                            .padding(5.dp),
+                                        painter =
+                                        rememberPainterResource(R.drawable.ic_play),
+                                        contentDescription = "",
+                                        tint = Color.White
                                     )
                                 }
                             }
-                        }
-                    }
-
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.width(48.dp)
-                    ) {
-                        Box {
-                            val context = LocalContext.current
-                            AsyncImage(
-                                modifier = Modifier
-                                    .size(48.dp)
-                                    .clip(RoundedCornerShape(6.dp)),
-                                model = ImageRequest.Builder(context).data(item.secondApp.icon).build(),
-                                contentDescription = item.secondApp.title,
-                                contentScale = ContentScale.Fit
-                            )
-
-                            if (item.secondApp.autoPlay == true) {
-                                Icon(
-                                    modifier = Modifier
-                                        .align(Alignment.BottomEnd)
-                                        .offset(x = 2.dp, y = 2.dp)
-                                        .alpha(.9f)
-                                        .size(22.dp)
-                                        .clip(CircleShape)
-                                        .background(AppTheme.colors.contentAccent)
-                                        .padding(5.dp),
-                                    painter =
-                                    rememberPainterResource(R.drawable.ic_play),
-                                    contentDescription = "",
-                                    tint = Color.White
+                            if (presetsNames) {
+                                Spacer(Modifier.height(REPLACEMENT_MENU_ICON_TO_TITLE_SPACE.dp))
+                                Text(
+                                    text = item.firstApp.title,
+                                    maxLines = 1,
+                                    style = AppTheme.typography.aboutText,
+                                    color = AppTheme.colors.contentPrimary,
+                                    overflow = TextOverflow.Ellipsis
                                 )
                             }
                         }
-                        if (presetsNames) {
-                            Spacer(Modifier.height(REPLACEMENT_MENU_ICON_TO_TITLE_SPACE.dp))
+
+                        Column(
+                            modifier = Modifier.padding(horizontal = 10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
                             Text(
-                                text = item.secondApp.title,
-                                maxLines = 1,
-                                style = AppTheme.typography.aboutText,
-                                color = AppTheme.colors.contentPrimary,
-                                overflow = TextOverflow.Ellipsis
+                                text = when (item.type) {
+                                    DisplayPresetType.HALF -> "1x1"
+                                    DisplayPresetType.ONE_TO_THREE -> "1x2"
+                                    DisplayPresetType.TWO_TO_THREE -> "2x1"
+                                    DisplayPresetType.THREE_TO_FOUR -> "3x4"
+                                    DisplayPresetType.THREE_TO_TWO -> "3x2"
+                                    DisplayPresetType.FOUR_TO_THREE -> "4x3"
+                                    DisplayPresetType.FREE -> stringResource(R.string.free_mode_short)
+                                    DisplayPresetType.CUSTOM -> splitRatioLabel(item.ratio)
+                                },
+                                textAlign = TextAlign.Center,
+                                style = AppTheme.typography.dialogListTitle,
+                                color = AppTheme.colors.contentPrimary
                             )
+                            val windowShift = item.bottomWindowShift && !noCaptionWindows
+                            if (item.darkBackground || windowShift) {
+                                Spacer(Modifier.height(3.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    if (item.darkBackground) {
+                                        Icon(
+                                            modifier = Modifier
+                                                .size(12.dp),
+                                            painter = rememberPainterResource(R.drawable.ic_moon),
+                                            contentDescription = null,
+                                            tint = AppTheme.colors.contentPrimary
+                                        )
+                                    }
+
+                                    if (windowShift) {
+                                        Icon(
+                                            modifier = Modifier
+                                                .size(12.5.dp),
+                                            painter = rememberPainterResource(R.drawable.ic_lift),
+                                            contentDescription = null,
+                                            tint = AppTheme.colors.contentPrimary
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            modifier = Modifier.width(48.dp)
+                        ) {
+                            Box {
+                                val context = LocalContext.current
+                                AsyncImage(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(RoundedCornerShape(6.dp)),
+                                    model = ImageRequest.Builder(context).data(item.secondApp.icon).build(),
+                                    contentDescription = item.secondApp.title,
+                                    contentScale = ContentScale.Fit
+                                )
+
+                                if (item.secondApp.autoPlay == true) {
+                                    Icon(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .offset(x = 2.dp, y = 2.dp)
+                                            .alpha(.9f)
+                                            .size(22.dp)
+                                            .clip(CircleShape)
+                                            .background(AppTheme.colors.contentAccent)
+                                            .padding(5.dp),
+                                        painter =
+                                        rememberPainterResource(R.drawable.ic_play),
+                                        contentDescription = "",
+                                        tint = Color.White
+                                    )
+                                }
+                            }
+                            if (presetsNames) {
+                                Spacer(Modifier.height(REPLACEMENT_MENU_ICON_TO_TITLE_SPACE.dp))
+                                Text(
+                                    text = item.secondApp.title,
+                                    maxLines = 1,
+                                    style = AppTheme.typography.aboutText,
+                                    color = AppTheme.colors.contentPrimary,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }

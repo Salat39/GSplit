@@ -27,4 +27,6 @@ interface SplitPresetsRepository {
     suspend fun setWindowShift(id: Long, enable: Boolean)
 
     suspend fun setQuickAccess(id: Long, enable: Boolean)
+
+    suspend fun reorderPresets(ids: List<Long>)
 }

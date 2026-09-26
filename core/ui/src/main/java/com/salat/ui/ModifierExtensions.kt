@@ -14,7 +14,6 @@ import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.imePadding
-import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -165,7 +164,7 @@ fun Modifier.longPressGesture(
     onLongPress: () -> Unit
 ): Modifier = composed {
     val interactionSource = remember { MutableInteractionSource() }
-    val rippleIndication = if (rippleEnabled) rememberRipple() else null
+    val rippleIndication = if (rippleEnabled) LocalIndication.current else null
 
     this
         .indication(interactionSource, rippleIndication)

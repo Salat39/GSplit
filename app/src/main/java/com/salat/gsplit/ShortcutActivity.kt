@@ -1,107 +1,125 @@
 package com.salat.gsplit
 
-import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.view.ContextThemeWrapper
+import androidx.activity.ComponentActivity
 import androidx.activity.viewModels
-import androidx.appcompat.app.AlertDialog
-import androidx.appcompat.app.AppCompatActivity
-import com.salat.splitpresets.domain.entity.PresetType
-import com.salat.splitpresets.domain.entity.SplitPreset
-import com.salat.ui.observeLifecycleFlow
+import com.salat.settings.list.presentation.entity.DisplayPresetType
+import com.salat.settings.list.presentation.entity.DisplaySplitPreset
+import com.salat.ui.splitRatioLabel
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
-class ShortcutActivity : AppCompatActivity() {
+class ShortcutActivity : ComponentActivity() {
     private val viewModel: ShortcutViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        observeLifecycleFlow(viewModel.presetsListState) {
-            if (it.isEmpty()) {
-                finish()
-            } else {
-                showOptionDialog(it)
+        setPresetSelectContent(
+            viewModel = viewModel,
+            lastLaunchedHint = com.salat.resources.R.string.last_launched_shortcut_hint,
+            onSelectPreset = ::performLaunchPresetAction,
+            onSelectLastLaunched = ::performLastLaunchedAction,
+            onSelectPresetPanel = ::performPresetPanelAction
+        )
+    }
+
+    private fun DisplaySplitPreset.toShortcutTitle(): String {
+        if (type == DisplayPresetType.FREE) return toFreeTitle()
+
+        return buildString {
+            append("ID")
+            append(id)
+            append(": [")
+            append(firstApp.title)
+            append("]")
+
+            if (firstApp.autoPlay == true) {
+                append("[▶]")
             }
+
+            append(" - ")
+            append(typeTitle())
+
+            if (darkBackground || bottomWindowShift) {
+                append(
+                    listOfNotNull(
+                        if (darkBackground) "D" else null,
+                        if (bottomWindowShift) "S" else null
+                    ).joinToString(prefix = "[", postfix = "]", separator = ",")
+                )
+            }
+
+            append(" - ")
+
+            if (secondApp.autoPlay == true) {
+                append("[▶]")
+            }
+
+            append("[")
+            append(secondApp.title)
+            append("]")
         }
     }
 
-    private fun showOptionDialog(splitPresets: List<SplitPreset>) {
-        val dialogContext: Context = ContextThemeWrapper(this, R.style.Theme_GSplit_AppTheme)
-
-        val titles = splitPresets.map {
-            buildString {
-                append("ID")
-                append(it.id)
-                append(": [")
-                append(it.firstApp.title)
-                append("]")
-
-                if (it.firstApp.autoPlay == true) {
-                    append("[▶]")
-                }
-
-                append(" - ")
-                append(it.type.toDisplay())
-
-                if (it.darkBackground || it.bottomWindowShift) {
-                    append(
-                        listOfNotNull(
-                            if (it.darkBackground) "D" else null,
-                            if (it.bottomWindowShift) "S" else null
-                        ).joinToString(prefix = "[", postfix = "]", separator = ",")
-                    )
-                }
-
-                append(" - ")
-
-                if (it.secondApp.autoPlay == true) {
-                    append("[▶]")
-                }
-
-                append("[")
-                append(it.secondApp.title)
-                append("]")
-            }
-        }
-
-        val lastLaunchTitle = getString(com.salat.resources.R.string.last_launched)
-        AlertDialog.Builder(dialogContext)
-            .setTitle(getString(com.salat.resources.R.string.select_an_preset))
-            .setItems((titles + lastLaunchTitle).toTypedArray()) { _, which ->
-                if (which == splitPresets.size) {
-                    performLastLaunchedAction(lastLaunchTitle)
-                } else {
-                    performLaunchPresetAction(splitPresets[which].id, titles[which])
-                }
-            }
-            .setOnCancelListener {
-                finish()
-            }
-            .show()
+    private fun DisplaySplitPreset.typeTitle() = when (type) {
+        DisplayPresetType.HALF -> "1x1"
+        DisplayPresetType.ONE_TO_THREE -> "1x2"
+        DisplayPresetType.TWO_TO_THREE -> "2x1"
+        DisplayPresetType.THREE_TO_FOUR -> "3x4"
+        DisplayPresetType.THREE_TO_TWO -> "3x2"
+        DisplayPresetType.FOUR_TO_THREE -> "4x3"
+        DisplayPresetType.FREE -> "free"
+        DisplayPresetType.CUSTOM -> splitRatioLabel(ratio)
     }
 
-    private fun PresetType.toDisplay() = when (this) {
-        PresetType.HALF -> "1x1"
-        PresetType.ONE_TO_THREE -> "1x2"
-        PresetType.TWO_TO_THREE -> "2x1"
-        PresetType.THREE_TO_FOUR -> "3x4"
-        PresetType.THREE_TO_TWO -> "3x2"
-        PresetType.FOUR_TO_THREE -> "4x3"
+    private fun DisplaySplitPreset.toFreeTitle() = buildString {
+        append("ID")
+        append(id)
+        append(": ")
+        append(
+            windows.joinToString(separator = ", ") { window ->
+                if (window.app.autoPlay == true) "[${window.app.title}][▶]" else "[${window.app.title}]"
+            }
+        )
+        append(" - ")
+        append(typeTitle())
+        if (darkBackground) append("[D]")
     }
 
     @Suppress("DEPRECATION")
-    private fun performLaunchPresetAction(id: Long, title: String) {
+    private fun performLaunchPresetAction(preset: DisplaySplitPreset) {
         val shortcutIntent = Intent(this, PresetLauncherActivity::class.java).apply {
             action = Intent.ACTION_VIEW
-            putExtra("id", id)
+            putExtra("id", preset.id)
+        }
+        val iconRes = if (preset.type == DisplayPresetType.FREE) {
+            com.salat.resources.R.mipmap.ic_launcher_free
+        } else com.salat.resources.R.mipmap.ic_launcher
+
+        val legacyShortcutIntent = Intent().apply {
+            putExtra(Intent.EXTRA_SHORTCUT_INTENT, shortcutIntent)
+            putExtra(Intent.EXTRA_SHORTCUT_NAME, preset.toShortcutTitle())
+            putExtra(
+                Intent.EXTRA_SHORTCUT_ICON_RESOURCE,
+                Intent.ShortcutIconResource.fromContext(this@ShortcutActivity, iconRes)
+            )
+        }
+        setResult(RESULT_OK, legacyShortcutIntent)
+        finish()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun performLastLaunchedAction() {
+        val shortcutIntent = Intent(this, PresetLauncherActivity::class.java).apply {
+            action = Intent.ACTION_VIEW
+            putExtra("launch_last", true)
         }
 
         val legacyShortcutIntent = Intent().apply {
             putExtra(Intent.EXTRA_SHORTCUT_INTENT, shortcutIntent)
-            putExtra(Intent.EXTRA_SHORTCUT_NAME, title) // TODO
+            putExtra(Intent.EXTRA_SHORTCUT_NAME, getString(com.salat.resources.R.string.last_launched))
             putExtra(
                 Intent.EXTRA_SHORTCUT_ICON_RESOURCE,
                 Intent.ShortcutIconResource.fromContext(
@@ -115,15 +133,12 @@ class ShortcutActivity : AppCompatActivity() {
     }
 
     @Suppress("DEPRECATION")
-    private fun performLastLaunchedAction(title: String) {
-        val shortcutIntent = Intent(this, PresetLauncherActivity::class.java).apply {
-            action = Intent.ACTION_VIEW
-            putExtra("launch_last", true)
-        }
+    private fun performPresetPanelAction() {
+        val shortcutIntent = Intent(this, PresetPanelActivity::class.java).setAction(Intent.ACTION_VIEW)
 
         val legacyShortcutIntent = Intent().apply {
             putExtra(Intent.EXTRA_SHORTCUT_INTENT, shortcutIntent)
-            putExtra(Intent.EXTRA_SHORTCUT_NAME, title) // TODO
+            putExtra(Intent.EXTRA_SHORTCUT_NAME, getString(com.salat.resources.R.string.preset_panel))
             putExtra(
                 Intent.EXTRA_SHORTCUT_ICON_RESOURCE,
                 Intent.ShortcutIconResource.fromContext(

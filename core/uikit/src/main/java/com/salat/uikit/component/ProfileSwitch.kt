@@ -21,8 +21,8 @@ fun ProfileSwitch(
     val colors = SwitchDefaults.colors(
         checkedThumbColor = AppTheme.colors.surfaceSettingsLayer1, // background in enable
         checkedTrackColor = AppTheme.colors.contentAccent,
-        uncheckedThumbColor = AppTheme.colors.sliderPassive,
-        uncheckedTrackColor = AppTheme.colors.surfaceSettingsLayer1, // background in disable
+        uncheckedThumbColor = AppTheme.colors.contentPrimary.copy(.5f),
+        uncheckedTrackColor = AppTheme.colors.contentPrimary.copy(.06f),
         uncheckedBorderColor = AppTheme.colors.sliderPassive,
         disabledCheckedThumbColor = AppTheme.colors.surfaceSettingsLayer1,
         disabledCheckedTrackColor = AppTheme.colors.contentAccent.copy(.5f),

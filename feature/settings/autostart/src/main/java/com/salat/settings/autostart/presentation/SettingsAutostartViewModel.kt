@@ -2,6 +2,8 @@ package com.salat.settings.autostart.presentation
 
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.viewModelScope
+import com.salat.adb.data.entity.AdbConnectionState
+import com.salat.adb.domain.usecases.AdbConnectionStateUseCase
 import com.salat.preferences.domain.entity.BoolPref
 import com.salat.preferences.domain.entity.FloatPref
 import com.salat.preferences.domain.entity.IntPref
@@ -24,6 +26,10 @@ internal const val MAX_AUTOSTART_DELAY = 30_000
 internal const val DEFAULT_UI_SCALE = 1f
 internal const val DEFAULT_AUTOSTART_DELAY = 2000
 
+internal const val MIN_AUTOSTART_PAUSE_THRESHOLD = 10_000
+internal const val MAX_AUTOSTART_PAUSE_THRESHOLD = 600_000
+internal const val DEFAULT_AUTOSTART_PAUSE_THRESHOLD = 60_000
+
 @HiltViewModel
 class SettingsAutostartViewModel @Inject constructor(
     private val saveIntPrefUseCase: SaveIntPrefUseCase,
@@ -31,6 +37,7 @@ class SettingsAutostartViewModel @Inject constructor(
     private val saveBoolPrefUseCase: SaveBoolPrefUseCase,
     private val flowPrefsUseCase: FlowPrefsUseCase,
     private val checkAccessibilityServiceEnabledUseCase: CheckAccessibilityServiceEnabledUseCase,
+    private val adbConnectionStateUseCase: AdbConnectionStateUseCase
 ) : BaseSyncViewModel<SettingsAutostartViewModel.ViewState, SettingsAutostartViewModel.Action>(ViewState()) {
 
     init {
@@ -40,7 +47,9 @@ class SettingsAutostartViewModel @Inject constructor(
                 BoolPref.SelfAutostart,
                 BoolPref.SelfAutostartInBg,
                 BoolPref.SelfAutostartByConnect,
-                IntPref.AutostartDelay
+                IntPref.AutostartDelay,
+                BoolPref.SelfAutostartAfterPause,
+                IntPref.AutostartPauseThreshold
             ).firstOrNull()
 
             collectedPreferences?.let { prefs ->
@@ -51,6 +60,8 @@ class SettingsAutostartViewModel @Inject constructor(
                         selfAutostartInBg = prefs[2] as Boolean,
                         selfAutostartByConnect = prefs[3] as Boolean,
                         autostartDelay = prefs[4] as Int,
+                        selfAutostartAfterPause = prefs[5] as Boolean,
+                        autostartPauseThreshold = prefs[6] as Int
                     )
                 )
             }
@@ -59,6 +70,11 @@ class SettingsAutostartViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             checkAccessibilityServiceEnabledUseCase.flow.collect {
                 sendAction(Action.SetAccessibilityServiceEnabled(it))
+            }
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            adbConnectionStateUseCase.flow.collect {
+                sendAction(Action.SetAdbConnected(it is AdbConnectionState.Connected))
             }
         }
     }
@@ -114,27 +130,51 @@ class SettingsAutostartViewModel @Inject constructor(
             state.value.copy(autostartDelay = viewAction.value)
         }
 
+        is Action.SetSelfAutostartAfterPause -> {
+            viewModelScope.launch(Dispatchers.IO) {
+                saveBoolPrefUseCase.execute(
+                    BoolPref.SelfAutostartAfterPause,
+                    viewAction.value ?: BoolPref.SelfAutostartAfterPause.default
+                )
+            }
+            state.value.copy(selfAutostartAfterPause = viewAction.value)
+        }
+
+        is Action.SetAutostartPauseThreshold -> {
+            viewModelScope.launch(Dispatchers.IO) {
+                saveIntPrefUseCase.execute(IntPref.AutostartPauseThreshold, viewAction.value)
+            }
+            state.value.copy(autostartPauseThreshold = viewAction.value)
+        }
+
         is Action.InitPrefs -> state.value.copy(
             uiScale = viewAction.uiScale,
             selfAutostart = viewAction.selfAutostart,
             selfAutostartInBg = viewAction.selfAutostartInBg,
             selfAutostartByConnect = viewAction.selfAutostartByConnect,
             autostartDelay = viewAction.autostartDelay,
+            selfAutostartAfterPause = viewAction.selfAutostartAfterPause,
+            autostartPauseThreshold = viewAction.autostartPauseThreshold
         )
 
         is Action.SetAccessibilityServiceEnabled -> state.value.copy(
             accessibilityServiceEnabled = viewAction.value
         )
+
+        is Action.SetAdbConnected -> state.value.copy(adbConnected = viewAction.value)
     }
 
     @Immutable
     data class ViewState(
         val accessibilityServiceEnabled: Boolean = false,
+        val adbConnected: Boolean = false,
         val uiScale: Float = DEFAULT_UI_SCALE,
         val selfAutostart: Boolean? = null,
         val selfAutostartInBg: Boolean? = null,
         val selfAutostartByConnect: Boolean? = null,
-        val autostartDelay: Int = DEFAULT_AUTOSTART_DELAY
+        val autostartDelay: Int = DEFAULT_AUTOSTART_DELAY,
+        val selfAutostartAfterPause: Boolean? = null,
+        val autostartPauseThreshold: Int = DEFAULT_AUTOSTART_PAUSE_THRESHOLD
     ) : MviViewState
 
     sealed class Action : MviAction {
@@ -144,9 +184,13 @@ class SettingsAutostartViewModel @Inject constructor(
             val selfAutostartInBg: Boolean?,
             val selfAutostartByConnect: Boolean?,
             val autostartDelay: Int,
+            val selfAutostartAfterPause: Boolean?,
+            val autostartPauseThreshold: Int
         ) : Action()
 
         internal class SetAccessibilityServiceEnabled(val value: Boolean) : Action()
+
+        internal class SetAdbConnected(val value: Boolean) : Action()
 
         internal class SetUiScale(val scale: Float) : Action()
 
@@ -157,5 +201,9 @@ class SettingsAutostartViewModel @Inject constructor(
         internal class SetSelfAutostartByConnect(val value: Boolean?) : Action()
 
         internal class SetAutostartDelay(val value: Int) : Action()
+
+        internal class SetSelfAutostartAfterPause(val value: Boolean?) : Action()
+
+        internal class SetAutostartPauseThreshold(val value: Int) : Action()
     }
 }

@@ -11,5 +11,7 @@ data class DisplaySplitPreset(
     val darkBackground: Boolean,
     val bottomWindowShift: Boolean,
     val quickAccess: Boolean,
-    val id: Long
+    val id: Long,
+    val windows: List<DisplayFreeWindow> = emptyList(),
+    val ratio: Float = .5f
 )

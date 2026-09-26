@@ -9,9 +9,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -20,10 +20,18 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.salat.resources.R
+import com.salat.uikit.component.BaseIconButton
+import com.salat.uikit.component.ToolbarActionButton
+import com.salat.uikit.component.ToolbarActionStyle
 import com.salat.uikit.theme.AppTheme
 
 @Composable
-internal fun RenderToolbar(onAddClick: () -> Unit, onSettingsClick: () -> Unit) {
+internal fun RenderToolbar(
+    reorderMode: Boolean,
+    onAddClick: () -> Unit,
+    onSettingsClick: () -> Unit,
+    onDoneClick: () -> Unit
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -34,7 +42,7 @@ internal fun RenderToolbar(onAddClick: () -> Unit, onSettingsClick: () -> Unit) 
         Spacer(Modifier.width(16.dp))
 
         Text(
-            text = stringResource(R.string.app_label),
+            text = stringResource(if (reorderMode) R.string.preset_order else R.string.app_label),
             modifier = Modifier.weight(1f),
             color = AppTheme.colors.contentPrimary,
             style = AppTheme.typography.toolbar,
@@ -44,32 +52,41 @@ internal fun RenderToolbar(onAddClick: () -> Unit, onSettingsClick: () -> Unit) 
 
         Spacer(Modifier.width(10.dp))
 
-        IconButton(
-            modifier = Modifier
-                .size(52.dp),
-            onClick = onAddClick
-        ) {
-            Icon(
-                modifier = Modifier.size(30.dp),
-                imageVector = Icons.Filled.Add,
-                tint = AppTheme.colors.contentPrimary,
-                contentDescription = "add"
+        if (reorderMode) {
+            ToolbarActionButton(
+                text = stringResource(R.string.done),
+                icon = Icons.Filled.Check,
+                style = ToolbarActionStyle.Tonal,
+                onClick = onDoneClick
             )
+        } else {
+            BaseIconButton(
+                modifier = Modifier
+                    .size(52.dp),
+                onClick = onAddClick
+            ) {
+                Icon(
+                    modifier = Modifier.size(30.dp),
+                    imageVector = Icons.Filled.Add,
+                    tint = AppTheme.colors.contentPrimary,
+                    contentDescription = "add"
+                )
+            }
+
+            BaseIconButton(
+                modifier = Modifier
+                    .size(52.dp),
+                onClick = onSettingsClick
+            ) {
+                Icon(
+                    modifier = Modifier.size(25.dp),
+                    imageVector = Icons.Filled.Settings,
+                    tint = AppTheme.colors.contentPrimary,
+                    contentDescription = "settings"
+                )
+            }
         }
 
-        IconButton(
-            modifier = Modifier
-                .size(52.dp),
-            onClick = onSettingsClick
-        ) {
-            Icon(
-                modifier = Modifier.size(25.dp),
-                imageVector = Icons.Filled.Settings,
-                tint = AppTheme.colors.contentPrimary,
-                contentDescription = "settings"
-            )
-        }
-
-        Spacer(Modifier.width(16.dp))
+        Spacer(Modifier.width(if (reorderMode) 12.dp else 16.dp))
     }
 }

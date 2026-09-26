@@ -40,6 +40,8 @@ dependencies {
     implementation(project(Modules.CORE_LAUNCH_HISTORY))
     implementation(project(Modules.CORE_REMOTE_CONFIG))
     implementation(project(Modules.CORE_FILE_DOWNLOADER))
+    implementation(project(Modules.CORE_ADB))
+    implementation(project(Modules.FEATURE_SETTINGS_COMMON))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)

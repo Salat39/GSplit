@@ -30,6 +30,7 @@ android {
 
 dependencies {
     implementation(project(Modules.CORE_BASE))
+    implementation(project(Modules.CORE_ADB))
     implementation(project(Modules.CORE_RESOURCES))
     implementation(project(Modules.CORE_STATE_KEEPER))
     implementation(project(Modules.CORE_UI))

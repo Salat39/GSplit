@@ -2,13 +2,15 @@ package com.salat.settings.list.presentation.mappers
 
 import android.graphics.drawable.Drawable
 import com.salat.settings.list.presentation.entity.DisplayAppPreset
+import com.salat.settings.list.presentation.entity.DisplayFreeWindow
 import com.salat.settings.list.presentation.entity.DisplayPresetType
 import com.salat.settings.list.presentation.entity.DisplaySplitPreset
 import com.salat.splitpresets.domain.entity.AppPreset
+import com.salat.splitpresets.domain.entity.FreeWindowPreset
 import com.salat.splitpresets.domain.entity.PresetType
 import com.salat.splitpresets.domain.entity.SplitPreset
 
-internal fun List<SplitPreset>.toDisplay() = map { it.toDisplay() }
+fun List<SplitPreset>.toDisplay() = map { it.toDisplay() }
 
 internal fun SplitPreset.toDisplay() = DisplaySplitPreset(
     firstApp = firstApp.toDisplay(),
@@ -18,7 +20,18 @@ internal fun SplitPreset.toDisplay() = DisplaySplitPreset(
     darkBackground = darkBackground,
     bottomWindowShift = bottomWindowShift,
     quickAccess = quickAccess,
-    id = id
+    id = id,
+    windows = windows.map { it.toDisplay() },
+    ratio = ratio
+)
+
+internal fun FreeWindowPreset.toDisplay() = DisplayFreeWindow(
+    app = app.toDisplay(),
+    left = left,
+    top = top,
+    right = right,
+    bottom = bottom,
+    alwaysOnTop = alwaysOnTop
 )
 
 internal fun AppPreset.toDisplay() = DisplayAppPreset(
@@ -35,4 +48,6 @@ internal fun PresetType.toDisplay() = when (this) {
     PresetType.THREE_TO_FOUR -> DisplayPresetType.THREE_TO_FOUR
     PresetType.THREE_TO_TWO -> DisplayPresetType.THREE_TO_TWO
     PresetType.FOUR_TO_THREE -> DisplayPresetType.FOUR_TO_THREE
+    PresetType.FREE -> DisplayPresetType.FREE
+    PresetType.CUSTOM -> DisplayPresetType.CUSTOM
 }

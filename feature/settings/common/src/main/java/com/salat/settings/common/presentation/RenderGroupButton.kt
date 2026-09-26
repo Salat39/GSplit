@@ -1,5 +1,6 @@
 package com.salat.settings.common.presentation
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +11,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -17,10 +19,21 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.unit.dp
+import com.salat.uikit.component.RenderChevron
+import com.salat.uikit.component.SettingsDefaults
 import com.salat.uikit.theme.AppTheme
+
+private val TileStartPadding = 16.dp
+private val TileSize = 40.dp
+private val TileTextGap = 18.dp
+val GroupButtonTextStart = TileStartPadding + TileSize + TileTextGap
+
+private val IconTileShape = RoundedCornerShape(12.dp)
+private const val TILE_ICON_SCALE = .8f
 
 @Composable
 fun RenderGroupButton(
@@ -32,24 +45,26 @@ fun RenderGroupButton(
 ) = Row(
     modifier = Modifier
         .fillMaxWidth()
-        .clickable(onClick = onClick),
+        .clickable(onClick = onClick)
+        .padding(horizontal = TileStartPadding),
     verticalAlignment = Alignment.CenterVertically
 ) {
     Box(
         modifier = Modifier
-            .width(72.dp),
+            .size(TileSize)
+            .clip(IconTileShape)
+            .background(AppTheme.colors.contentAccent.copy(.18f)),
         contentAlignment = Alignment.Center
     ) {
         Icon(
-            modifier = Modifier
-                .size(iconSize.dp),
+            modifier = Modifier.size((iconSize * TILE_ICON_SCALE).dp),
             painter = icon,
-            tint = AppTheme.colors.contentPrimary,
+            tint = AppTheme.colors.settingsTitleAccent,
             contentDescription = null
         )
     }
 
-    Spacer(Modifier.width(2.dp))
+    Spacer(Modifier.width(TileTextGap))
 
     Column(
         Modifier
@@ -67,11 +82,13 @@ fun RenderGroupButton(
 
             Text(
                 text = subtitle,
-                color = AppTheme.colors.contentPrimary.copy(.4f),
+                color = AppTheme.colors.contentPrimary.copy(SettingsDefaults.SUBTITLE_ALPHA),
                 style = AppTheme.typography.dialogSubtitle
             )
         }
     }
 
-    Spacer(Modifier.width(24.dp))
+    Spacer(Modifier.width(12.dp))
+
+    RenderChevron()
 }

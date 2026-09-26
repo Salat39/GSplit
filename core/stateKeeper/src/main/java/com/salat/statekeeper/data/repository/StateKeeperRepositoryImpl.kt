@@ -14,8 +14,6 @@ import kotlinx.coroutines.flow.asStateFlow
 class StateKeeperRepositoryImpl : StateKeeperRepository {
     private var skipAutoLaunch = false
 
-    // in the process of closing windows
-    private var inProcessClosingWindows = false
     private var closedSessionId = 0L
 
     private val _closeDarkScreenEvent = MutableSharedFlow<Boolean>()
@@ -55,12 +53,9 @@ class StateKeeperRepositoryImpl : StateKeeperRepository {
 
     override suspend fun sendSplitLauncherEvent(event: SplitLauncherEvent) = splitLauncherEventsFlow.emit(event)
 
-    override fun setInProcessClosingWindows(value: Boolean, sessionId: Long) {
-        if (value) closedSessionId = sessionId
-        inProcessClosingWindows = value
+    override fun setClosedSessionId(sessionId: Long) {
+        closedSessionId = sessionId
     }
-
-    override fun inProcessClosingWindows() = inProcessClosingWindows
 
     override fun getClosedSessionId() = closedSessionId
 
@@ -81,5 +76,19 @@ class StateKeeperRepositoryImpl : StateKeeperRepository {
 
     override suspend fun sendImportSettings() {
         _importSettingsEvents.emit(Unit)
+    }
+
+    private val _presetPanelShown = MutableStateFlow(false)
+    override val presetPanelShown = _presetPanelShown.asStateFlow()
+
+    override fun setPresetPanelShown(value: Boolean) {
+        _presetPanelShown.value = value
+    }
+
+    private val _placedWindowsSessionId = MutableStateFlow(0L)
+    override val placedWindowsSessionId = _placedWindowsSessionId.asStateFlow()
+
+    override fun setPlacedWindowsSessionId(sessionId: Long) {
+        _placedWindowsSessionId.value = sessionId
     }
 }

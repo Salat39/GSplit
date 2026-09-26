@@ -1,7 +1,5 @@
 package com.salat.settings.add.presentation.components
 
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,17 +12,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.salat.resources.R
+import com.salat.uikit.component.BaseIconButton
+import com.salat.uikit.component.ToolbarActionButton
 import com.salat.uikit.theme.AppTheme
 
 @Composable
@@ -41,7 +39,7 @@ internal fun RenderToolbar(
             .background(AppTheme.colors.surfaceBackground),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(
+        BaseIconButton(
             modifier = Modifier
                 .size(56.dp)
                 .padding(start = 2.dp),
@@ -49,7 +47,7 @@ internal fun RenderToolbar(
         ) {
             Icon(
                 imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                tint = Color.White,
+                tint = AppTheme.colors.contentPrimary,
                 contentDescription = "back"
             )
         }
@@ -66,24 +64,13 @@ internal fun RenderToolbar(
 
         Spacer(Modifier.width(10.dp))
 
-        androidx.compose.animation.AnimatedVisibility(
-            visible = showApply.value,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            IconButton(
-                modifier = Modifier
-                    .size(56.dp),
-                onClick = onApply
-            ) {
-                Icon(
-                    imageVector = Icons.Filled.Check,
-                    tint = Color.White,
-                    contentDescription = "apply"
-                )
-            }
-        }
+        ToolbarActionButton(
+            text = stringResource(R.string.save),
+            icon = Icons.Filled.Check,
+            enabled = showApply.value,
+            onClick = onApply
+        )
 
-        Spacer(Modifier.width(16.dp))
+        Spacer(Modifier.width(12.dp))
     }
 }

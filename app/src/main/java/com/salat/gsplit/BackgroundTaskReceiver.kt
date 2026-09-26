@@ -65,7 +65,7 @@ class BackgroundTaskReceiver : BroadcastReceiver() {
             }
 
             "$BASE_PATH.LAUNCH_LAST" -> scope.launch {
-                stateKeeper.sendAccessibilityServiceEvent(AccessibilityServiceEvent.LaunchLast)
+                stateKeeper.sendAccessibilityServiceEvent(AccessibilityServiceEvent.LaunchLast())
             }
 
             "$BASE_PATH.LAUNCH_AUTOSTART" -> scope.launch {
@@ -105,6 +105,36 @@ class BackgroundTaskReceiver : BroadcastReceiver() {
                     )
                 )
             }
+
+            "$BASE_PATH.FREE_LAUNCH" -> scope.launch {
+                val packageName = intent.getStringExtra("package") ?: ""
+                if (packageName.isEmpty()) return@launch
+
+                val width = intent.getIntExtra("width", 50).coerceIn(1, 100)
+                val height = intent.getIntExtra("height", 40).coerceIn(1, 100)
+                val x = intent.getIntExtra("x", 10).coerceIn(0, 100 - width)
+                val y = intent.getIntExtra("y", 10).coerceIn(0, 100 - height)
+                val freeLaunch = Intent(context, PresetLauncherActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .putExtra("free_package", packageName)
+                    .putExtra("free_bounds", intArrayOf(x, y, x + width, y + height).map { it / 100f }.toFloatArray())
+                    .putExtra("free_auto_play", intent.getIntExtra("auto_play", 0) == 1)
+                    .putExtra("free_pin", intent.getIntExtra("pin", 0) == 1)
+
+                stateKeeper.sendAccessibilityServiceEvent(
+                    AccessibilityServiceEvent.CloseCurrentWindows {
+                        runCatching { context.startActivity(freeLaunch) }.onFailure { Timber.e(it) }
+                    }
+                )
+            }
+
+            "$BASE_PATH.TOGGLE_PRESET_PANEL" -> runCatching {
+                context.startActivity(
+                    Intent(context, PresetPanelActivity::class.java)
+                        .setAction(Intent.ACTION_VIEW)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                )
+            }.onFailure { Timber.e(it) }
 
             else -> Unit
         }

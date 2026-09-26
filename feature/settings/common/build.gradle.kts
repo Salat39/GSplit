@@ -19,6 +19,7 @@ dependencies {
     implementation(project(Modules.CORE_RESOURCES))
     implementation(project(Modules.CORE_UI))
     implementation(project(Modules.CORE_UIKIT))
+    implementation(project(Modules.CORE_ADB))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.appcompat)

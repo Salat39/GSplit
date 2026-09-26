@@ -15,11 +15,13 @@ import android.view.WindowManager
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
+import com.salat.adb.data.entity.AdbConnectionState
 import com.salat.adb.domain.repository.AdbRepository
 import com.salat.gsplit.PresetLauncherActivity
 import com.salat.gsplit.presentation.entity.FreeFormPosition
 import com.salat.gsplit.presentation.entity.FreeFormWindow
 import com.salat.gsplit.presentation.entity.SplitStateBroadcastData
+import com.salat.gsplit.presentation.util.PauseDetector
 import com.salat.overlay.presentation.startOverlay
 import com.salat.overlay.presentation.stopOverlay
 import com.salat.preferences.domain.DataStoreRepository
@@ -32,10 +34,10 @@ import com.salat.statekeeper.domain.repository.StateKeeperRepository
 import dagger.hilt.android.AndroidEntryPoint
 import domain.launchWithRetry
 import javax.inject.Inject
+import kotlin.coroutines.resume
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -45,6 +47,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
@@ -69,6 +73,8 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
         private const val CLOSE_WINDOW_DELAY_BEFORE_CLICK = 100L
         private const val CLOSE_WINDOW_CLICK_TIME = 100L
         private const val AWAIT_TIMEOUT = 5_000L
+        private const val FREE_WINDOWS_SETTLE_TIMEOUT = 1_000L
+        private const val HIDDEN_WINDOW_AWAIT_TIMEOUT = 1_500L
         private const val SLEEP_DELAY = 300_000L
 
         private const val RETRY_WHEN_ATTEMPTS = 3
@@ -94,11 +100,23 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
     private val _freeFormWindows = MutableStateFlow<Pair<FreeFormWindow?, FreeFormWindow?>>(Pair(null, null))
     private val freeFormWindows = _freeFormWindows.asStateFlow()
 
+    private val _freePresetWindows = MutableStateFlow<List<FreeFormWindow>>(emptyList())
+    private val freePresetWindows = _freePresetWindows.asStateFlow()
+
+    private val shownWindows = combine(freeFormWindows, freePresetWindows) { (top, bottom), freeWindows ->
+        listOfNotNull(top, bottom) + freeWindows
+    }
+
     private val _splitStateBroadcastData = MutableStateFlow<SplitStateBroadcastData?>(null)
     private val splitStateBroadcastData = _splitStateBroadcastData.asStateFlow()
 
     private var taskSleep: Job? = null
     private var sleepTaskSessionId = -2L
+
+    private var pauseDetector: PauseDetector? = null
+    private var selfAutostart = false
+    private var autostartAfterPause = false
+    private var autostartPauseThreshold = IntPref.AutostartPauseThreshold.default
 
     // Local flag whether to handle dark screen close events
     private var darkScreenAutoClose = false
@@ -108,11 +126,10 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
     private var sequentialClosing = false
     private var dodgeSystemGesWhenClosing = true
 
-    private var enableAdbHelper = false
-    private var enableAdbOverlayFun = false
-
     // If true, wait until there are no windows on the screen to close the black screen
     private var enableDarkScreenCloseTracking = false
+
+    private var settledSessionId = 0L
 
     // Save current focus for restore after
     private var memorizedFocusPackageName = ""
@@ -123,11 +140,11 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
     // External app notifications
     private var externalAppEventSync = false
 
-    // Start-Stop tasks
-    private var standbyMode = false
-
     // To avoid processing events when the split is not running
     private var splitWasLaunched = false
+
+    // The window list does not show the windows under the open preset panel
+    private var presetPanelCoveredPackages = emptyList<String>()
 
     // add this at the top of the class
     private val stateChangeFlow = MutableSharedFlow<Unit>(
@@ -179,35 +196,57 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
             collectWindowsChanges()
         }
         serviceScope.launch { collectSharedEvents() }
+        serviceScope.launch { collectPresetPanelCoveredWindows() }
+        serviceScope.launch { collectSettledSessions() }
+
+        pauseDetector = PauseDetector(this, serviceScope, ::onPauseEnded)
     }
 
     private fun CoroutineScope.collectBasePrefs() = launchWithRetry(RETRY_WHEN_ATTEMPTS) {
         dataStore.getAnyPrefsFlow(
             BoolPref.DarkScreenAutoClose,
-            BoolPref.AutoRefocusWhenBottomWindowShift,
             BoolPref.EnableOverlays,
             BoolPref.CloseWindowDodgeSystemGes,
             BoolPref.CloseWindowSequential,
             IntPref.WindowClosingExtraPause,
             BoolPref.ExternalAppEventSync,
-            BoolPref.StandbyMode,
-            BoolPref.EnableAdbHelper,
-            BoolPref.EnableAdbOverlayFun
+            BoolPref.SelfAutostart,
+            BoolPref.SelfAutostartAfterPause,
+            IntPref.AutostartPauseThreshold,
+            BoolPref.AutoRefocusWhenBottomWindowShift
         ).collect { prefs ->
             darkScreenAutoClose = prefs[0] as Boolean
-            autoRefocusWhenBottomWindowShift = prefs[1] as Boolean
-            enableOverlays = prefs[2] as Boolean
-            dodgeSystemGesWhenClosing = prefs[3] as Boolean
-            sequentialClosing = prefs[4] as Boolean
-            windowClosingExtraPause = prefs[5] as Int
-            externalAppEventSync = prefs[6] as Boolean
+            enableOverlays = prefs[1] as Boolean
+            dodgeSystemGesWhenClosing = prefs[2] as Boolean
+            sequentialClosing = prefs[3] as Boolean
+            windowClosingExtraPause = prefs[4] as Int
+            externalAppEventSync = prefs[5] as Boolean
+            selfAutostart = prefs[6] as Boolean
+            autostartAfterPause = prefs[7] as Boolean
+            autostartPauseThreshold = prefs[8] as Int
+            autoRefocusWhenBottomWindowShift = prefs[9] as Boolean
+        }
+    }
 
-            val sm = prefs[7] as Boolean
-            if (sm != standbyMode && !sm) stopSleepTask()
-            standbyMode = sm
+    private fun onPauseEnded(durationMs: Long) {
+        if (!selfAutostart || !autostartAfterPause || durationMs < autostartPauseThreshold) return
+        serviceScope.launch {
+            delay(FREE_WINDOWS_SETTLE_TIMEOUT)
+            if (hasFreeFormAppWindows()) return@launch
+            Timber.d("[AS] Autostart after pause of ${durationMs / 1000} s")
+            startForegroundService(
+                Intent(this@AutoLaunchAccessibilityService, WakeUpForegroundService::class.java)
+                    .putExtra(WakeUpForegroundService.EXTRA_AFTER_PAUSE, true)
+            )
+        }
+    }
 
-            enableAdbHelper = prefs[8] as Boolean
-            enableAdbOverlayFun = prefs[9] as Boolean
+    private fun hasFreeFormAppWindows(): Boolean {
+        val bounds = Rect()
+        return windows.orEmpty().any { window ->
+            window.getBoundsInScreen(bounds)
+            window.type == AccessibilityWindowInfo.TYPE_APPLICATION &&
+                (bounds.width() < screenWidth || bounds.height() < screenHeight)
         }
     }
 
@@ -229,7 +268,7 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
                         event.autoPlay
                     )
 
-                    is AccessibilityServiceEvent.ReplacePreset -> replacePreset(event.presetId)
+                    is AccessibilityServiceEvent.ReplacePreset -> replacePreset(event.presetId, event.fromPresetPanel)
 
                     is AccessibilityServiceEvent.ReplaceSplit -> replaceSplit(
                         event.firstPackage,
@@ -241,7 +280,7 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
                         event.windowShift,
                     )
 
-                    AccessibilityServiceEvent.LaunchLast -> launchLast()
+                    is AccessibilityServiceEvent.LaunchLast -> launchLast(event.fromPresetPanel)
 
                     is AccessibilityServiceEvent.CloseCurrentWindows -> closeCurrentWindowsTask(event.postAction)
                 }
@@ -251,24 +290,42 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
         }
     }
 
+    // The panel sets the flag before its window appears. The window list still shows the windows under it
+    private fun CoroutineScope.collectPresetPanelCoveredWindows() = launch {
+        stateKeeper.presetPanelShown.filter { it }.collect {
+            presetPanelCoveredPackages = shownWindows.first().map { it.packageName }
+        }
+    }
+
+    // A window without caption opens full screen and gets its bounds later. The window list is not stable until then
+    private fun CoroutineScope.collectSettledSessions() = launch {
+        stateKeeper.placedWindowsSessionId.collectLatest { sessionId ->
+            delay(INIT_WINDOWS_DELAY)
+            settledSessionId = sessionId
+            stateChangeFlow.tryEmit(Unit)
+        }
+    }
+
     // Notify other app
     private fun CoroutineScope.collectSplitStateBroadcasts() = launch(Dispatchers.IO) {
         splitStateBroadcastData.collect { data -> data?.let { sendSplitStateBroadcast(it) } }
     }
 
     private fun CoroutineScope.collectWindowsChanges() = launchWithRetry(RETRY_WHEN_ATTEMPTS) {
-        freeFormWindows.collect { (topWindow, bottomWindow) ->
+        combine(freeFormWindows, freePresetWindows, ::Pair).collect { (splitWindows, freeWindows) ->
+            val (topWindow, bottomWindow) = splitWindows
+            val isAnyWindowShown = topWindow != null || bottomWindow != null || freeWindows.isNotEmpty()
 
             // At least one window appears, enable dark screen closing processing
-            if (topWindow != null || bottomWindow != null) {
+            if (isAnyWindowShown) {
                 enableDarkScreenCloseTracking = true
             }
 
             // Display overlay management
             if (enableOverlays) {
-                if (topWindow != null && bottomWindow != null) {
+                if ((topWindow != null && bottomWindow != null) || isLastFreeWindowShown(freeWindows)) {
                     startOverlay(this@AutoLaunchAccessibilityService)
-                } else if (topWindow == null && bottomWindow == null) {
+                } else if (!isAnyWindowShown) {
                     stopOverlay(this@AutoLaunchAccessibilityService)
                 }
             }
@@ -277,30 +334,32 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
             if (externalAppEventSync) {
                 _splitStateBroadcastData.update {
                     SplitStateBroadcastData(
-                        isShown = topWindow != null || bottomWindow != null,
+                        isShown = isAnyWindowShown,
                         firstPackageName = topWindow?.packageName ?: "",
                         secondPackageName = bottomWindow?.packageName ?: ""
                     )
                 }
             }
 
-            if (standbyMode) {
-                // Handle "split" was launched
-                if (topWindow != null || bottomWindow != null) {
-                    stopSleepTask()
-                    splitWasLaunched = true
-                }
+            if (isAnyWindowShown) {
+                stopSleepTask()
+                splitWasLaunched = true
+            }
 
-                // Reset current launched config
-                if (topWindow == null && bottomWindow == null && splitWasLaunched) {
-                    sleepTaskSessionId = stateKeeper.getLaunchedWindows()?.sessionId ?: -2L
-                    startSleepTask()
-                }
+            if (!isAnyWindowShown && splitWasLaunched) {
+                sleepTaskSessionId = stateKeeper.getLaunchedWindows()?.sessionId ?: -2L
+                startSleepTask()
             }
 
             // TODO windows screen configuration changed
             // Timber.d("[AS] Windows config: $topWindow $bottomWindow")
         }
+    }
+
+    // A covered window is not in the window list. The last launched window is on top
+    private fun isLastFreeWindowShown(freeWindows: List<FreeFormWindow>): Boolean {
+        val lastPackage = stateKeeper.getLaunchedWindows()?.freeWindowPackages?.lastOrNull() ?: return false
+        return freeWindows.any { it.packageName == lastPackage }
     }
 
     override fun onServiceConnected() {
@@ -357,12 +416,14 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
         val currentWindows = windows
         if (currentWindows == null) {
             _freeFormWindows.emit(null to null)
+            _freePresetWindows.emit(emptyList())
             return
         }
 
         // Collect the list of freeform windows (condition determined by window size)
         var topWindowCandidate: AccessibilityWindowInfo? = null
         var bottomWindowCandidate: AccessibilityWindowInfo? = null
+        val freePresetCandidates = mutableListOf<FreeFormWindow>()
 
         for (window in currentWindows) {
             // Check is no system app
@@ -379,6 +440,8 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
                     // Application in freeform mode
                     split.firstAppPackage -> topWindowCandidate = window
                     split.secondAppPackage -> bottomWindowCandidate = window
+                    in split.freeWindowPackages ->
+                        freePresetCandidates += FreeFormWindow(wPcg.toString(), FreeFormPosition.FREE, window)
 
                     else -> Unit
                 }
@@ -386,6 +449,11 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
 
             // Break if already collected
             if (topWindowCandidate != null && bottomWindowCandidate != null) break
+        }
+
+        val freePresetWindows = freePresetCandidates.distinctBy { it.packageName }
+        if (_freePresetWindows.value != freePresetWindows) {
+            _freePresetWindows.emit(freePresetWindows)
         }
 
         // Return if no windows
@@ -396,7 +464,6 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
 
         // Get split params
         val desiredBottomWindowShift = split.bottomWindowShift
-        val desiredLaunchTime = split.sessionId
 
         // Create FreeFormWindow objects if the corresponding window is found
         val freeFormTop = topWindowCandidate?.let {
@@ -411,12 +478,12 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
             _freeFormWindows.emit(Pair(freeFormTop, freeFormBottom))
         }
 
+        // The preset panel covers the windows but the split stays open
+        val trackDarkScreenClose = enableDarkScreenCloseTracking && !stateKeeper.presetPanelShown.value
         // If darkScreenAutoClose is enabled, there are no freeform windows and the full-screen application
         // is in the list of windows, send the dark screen close event
-        val currentTime = System.currentTimeMillis()
-        if (darkScreenAutoClose && enableDarkScreenCloseTracking &&
-            (currentTime - desiredLaunchTime) >= INIT_WINDOWS_DELAY &&
-            topWindowCandidate == null && bottomWindowCandidate == null &&
+        if (darkScreenAutoClose && trackDarkScreenClose && split.sessionId == settledSessionId &&
+            topWindowCandidate == null && bottomWindowCandidate == null && freePresetWindows.isEmpty() &&
             // Check if your full-screen self app is present in the window hierarchy
             currentWindows.any { window ->
                 window.root?.packageName?.toString() == packageName
@@ -427,9 +494,10 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
         }
 
         // Force focus top window. Refocus only if the second window has focus
+        val isSplitClosing = split.sessionId == stateKeeper.getClosedSessionId()
         if (autoRefocusWhenBottomWindowShift && desiredBottomWindowShift &&
-            freeFormTop != null && freeFormBottom != null && !stateKeeper.inProcessClosingWindows() &&
-            bottomWindowCandidate.isFocused
+            freeFormTop != null && freeFormBottom != null && !isSplitClosing &&
+            freeFormBottom.data.isFocused
         ) {
             setFocusWindow(freeFormTop.packageName)
         }
@@ -441,6 +509,7 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        pauseDetector?.release()
         serviceScope.launch {
             stateKeeper.setAccessibilityServiceEnabled(false)
             serviceScope.cancel()
@@ -467,115 +536,112 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
     private fun getCurrentSessionId() = stateKeeper.getLaunchedWindows()?.sessionId ?: 0L
 
     private suspend fun closeWindows() {
-        when {
-            enableAdbHelper && enableAdbOverlayFun -> adbCloseWindows()
+        val hasFreePresetWindows = _freePresetWindows.value.isNotEmpty()
+        if (hasFreePresetWindows) awaitFreePresetWindows()
 
-            sequentialClosing -> sequentiallyCloseWindows()
+        when {
+            isAdbConnected() -> adbCloseWindows()
+
+            sequentialClosing || hasFreePresetWindows -> sequentiallyCloseWindows()
 
             else -> parallelCloseWindows()
         }
     }
 
-    private suspend fun adbCloseWindows() {
-        try {
-            // disable force refocus
-            stateKeeper.setInProcessClosingWindows(true, getCurrentSessionId())
+    private fun isAdbConnected() = adb.connectionState.value is AdbConnectionState.Connected
 
-            val (first, second) = _freeFormWindows.value
-            val p1 = first?.packageName ?: ""
-            val p2 = second?.packageName ?: ""
-            // adb.forceStop(p1, p2)
-            adb.getTaskId(p1)?.let { adb.minimize(it) }
-            adb.getTaskId(p2)?.let { adb.minimize(it) }
-        } finally {
-            stateKeeper.setInProcessClosingWindows(false)
+    private fun launchedFreePresetPackages() = stateKeeper.getLaunchedWindows()?.freeWindowPackages.orEmpty()
+
+    // The replace menu covers the windows. The window list shows them again after the menu closes
+    private suspend fun awaitFreePresetWindows() {
+        val count = launchedFreePresetPackages().size
+        withTimeoutOrNull(FREE_WINDOWS_SETTLE_TIMEOUT) {
+            freePresetWindows.first { it.size >= count }
         }
+    }
+
+    private suspend fun adbCloseWindows() {
+        stateKeeper.setClosedSessionId(getCurrentSessionId())
+
+        val (first, second) = _freeFormWindows.value
+        val p1 = first?.packageName ?: ""
+        val p2 = second?.packageName ?: ""
+        adb.getTaskId(p1)?.let { adb.minimize(it) }
+        adb.getTaskId(p2)?.let { adb.minimize(it) }
+        freePresetClosingQueue().forEach { pkg -> adb.getTaskId(pkg)?.let { adb.minimize(it) } }
     }
 
     @Suppress("unused")
     private suspend fun sequentiallyCloseWindows() {
-        try {
-            // disable force refocus
-            stateKeeper.setInProcessClosingWindows(true, getCurrentSessionId())
+        stateKeeper.setClosedSessionId(getCurrentSessionId())
 
-            // Save the packages of free-form windows at the start
-            val packagesToClose = _freeFormWindows.value
-                .toList()
-                .mapNotNull { it?.packageName }
+        val queue = windowsClosingQueue()
+        val shownPackages = shownWindows.first().map { it.packageName }
 
-            val queue = if (isLandscape) packagesToClose.reversed() else packagesToClose
-
-            for (pkg in queue) {
-                // Wait for the current window with this package to appear
-                val win = withTimeoutOrNull(AWAIT_TIMEOUT) {
-                    freeFormWindows
-                        .map { pair -> listOfNotNull(pair.first, pair.second) }
-                        .map { list -> list.find { it.packageName == pkg } }
-                        .filterNotNull()
-                        .first()
-                }
-                if (win == null) continue
-
-                // Close this live instance
-                closeWindow(win)
-
-                // Wait until the window disappears from the list
-                withTimeoutOrNull(AWAIT_TIMEOUT) {
-                    freeFormWindows
-                        .filter { (t, b) ->
-                            t?.packageName != pkg && b?.packageName != pkg
-                        }
-                        .first()
-                }
+        for (pkg in queue) {
+            val appearTimeout = if (pkg in shownPackages) AWAIT_TIMEOUT else HIDDEN_WINDOW_AWAIT_TIMEOUT
+            val win = withTimeoutOrNull(appearTimeout) {
+                shownWindows
+                    .map { list -> list.find { it.packageName == pkg } }
+                    .filterNotNull()
+                    .first()
             }
+            if (win == null) continue
 
-            // enable force refocus
-            delay(100L)
-        } finally {
-            stateKeeper.setInProcessClosingWindows(false)
+            closeWindow(win)
+
+            withTimeoutOrNull(AWAIT_TIMEOUT) {
+                shownWindows
+                    .filter { list -> list.none { it.packageName == pkg } }
+                    .first()
+            }
         }
     }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
     private suspend fun parallelCloseWindows() {
-        try {
-            stateKeeper.setInProcessClosingWindows(true, getCurrentSessionId())
+        stateKeeper.setClosedSessionId(getCurrentSessionId())
 
-            val packagesToClose = _freeFormWindows.value
-                .toList()
-                .mapNotNull { it?.packageName }
+        val queue = windowsClosingQueue()
 
-            val queue = if (isLandscape) packagesToClose.reversed() else packagesToClose
+        for (pkg in queue) {
+            val win = withTimeoutOrNull(AWAIT_TIMEOUT) {
+                shownWindows
+                    .map { list -> list.find { it.packageName == pkg } }
+                    .filterNotNull()
+                    .first()
+            } ?: continue
 
-            for (pkg in queue) {
-                // Wait for the window to appear (up to AWAIT_TIMEOUT)
-                val win = withTimeoutOrNull(AWAIT_TIMEOUT) {
-                    freeFormWindows
-                        .map { (a, b) -> listOfNotNull(a, b) }
-                        .map { list -> list.find { it.packageName == pkg } }
-                        .filterNotNull()
-                        .first()
-                } ?: continue // If timeout — skip the package
-
-                // Close the window, but don't wait for callback indefinitely
-                val closed = withTimeoutOrNull(AWAIT_TIMEOUT) {
-                    suspendCancellableCoroutine<Boolean> { cont ->
-                        closeWindow(win) { result ->
-                            cont.resume(result) { /* ignore */ }
-                        }
+            val closed = withTimeoutOrNull(AWAIT_TIMEOUT) {
+                suspendCancellableCoroutine<Boolean> { cont ->
+                    closeWindow(win) { result ->
+                        cont.resume(result)
                     }
-                } ?: false
-
-                if (!closed) {
-                    Timber.w("[AS] Closing $pkg was not confirmed within $AWAIT_TIMEOUT ms")
                 }
+            } ?: false
 
-                // Short pause between iterations
-                delay(windowClosingExtraPause.toLong())
+            if (!closed) {
+                Timber.w("[AS] Closing $pkg was not confirmed within $AWAIT_TIMEOUT ms")
             }
-        } finally {
-            stateKeeper.setInProcessClosingWindows(false)
+
+            delay(windowClosingExtraPause.toLong())
         }
+    }
+
+    private fun windowsClosingQueue(): List<String> {
+        val splitPackages = _freeFormWindows.value.toList().mapNotNull { it?.packageName }
+        return (if (isLandscape) splitPackages.reversed() else splitPackages) + freePresetClosingQueue()
+    }
+
+    // Close the upper window first. An upper window can cover the close button of a lower window
+    private fun freePresetClosingQueue(): List<String> {
+        val layers = windows.orEmpty().associate { it.id to it.layer }
+        val shownPackages = _freePresetWindows.value
+            .sortedByDescending { layers[it.data.id] ?: Int.MIN_VALUE }
+            .map { it.packageName }
+        if (shownPackages.isEmpty()) return emptyList()
+        // A covered window is not in the window list. The last launched window is on top
+        val hiddenPackages = launchedFreePresetPackages().reversed() - shownPackages.toSet()
+        return shownPackages + hiddenPackages
     }
 
     @Suppress("UnnecessaryVariable")
@@ -704,18 +770,13 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
             return
         }
 
+        stateKeeper.setClosedSessionId(getCurrentSessionId())
         try {
-            stateKeeper.setInProcessClosingWindows(true, getCurrentSessionId())
-
             // Check: if there is no window at this index — immediately execute onReplaceWindowTask
             val currentPair = _freeFormWindows.value
             val maybeExisting = if (index == 0) currentPair.first else currentPair.second
             if (maybeExisting == null) {
                 onReplaceWindowTask(index, packageName, autoPlay)
-
-                // enable force refocus
-                delay(300L)
-                stateKeeper.setInProcessClosingWindows(false)
                 return
             }
 
@@ -728,47 +789,38 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
                     }
                     .filterNotNull() // remove nulls
                     .first() // wait for the first non-null FreeFormWindow
-            }
-            if (targetWindow == null) {
-                delay(300L)
-                stateKeeper.setInProcessClosingWindows(false)
-                return
-            }
+            } ?: return
 
-            if (enableAdbHelper && enableAdbOverlayFun) {
+            if (isAdbConnected()) {
                 targetWindow.packageName.takeIf { it.isNotEmpty() && it != "unknown" }?.let { targetPackage ->
                     // adb.forceStop(targetPackage)
                     adb.getTaskId(targetPackage)?.let { taskId -> adb.minimize(taskId) }
                     delay(150L)
                     onReplaceWindowTask(index, packageName, autoPlay)
                 }
-
-                stateKeeper.setInProcessClosingWindows(false)
             } else {
                 // focus window before closing
                 setFocusWindow(targetWindow.packageName)
                 delay(150L)
 
                 closeWindow(targetWindow) {
-                    serviceScope.launch {
-                        onReplaceWindowTask(index, packageName, autoPlay)
-
-                        // enable force refocus
-                        delay(300L)
-                        stateKeeper.setInProcessClosingWindows(false)
-                    }
+                    serviceScope.launch { onReplaceWindowTask(index, packageName, autoPlay) }
                 }
             }
         } catch (e: Exception) {
             Timber.e(e)
-            stateKeeper.setInProcessClosingWindows(false)
         }
     }
 
-    private suspend fun replacePreset(presetId: Long) {
-        stateKeeper.setInProcessClosingWindows(true, getCurrentSessionId())
+    private suspend fun replacePreset(presetId: Long, fromPresetPanel: Boolean) {
+        if (fromPresetPanel && !awaitPresetPanelCoveredWindows()) {
+            startPresetLauncher { putExtra("id", presetId) }
+            return
+        }
 
-        if (enableAdbHelper && enableAdbOverlayFun) {
+        stateKeeper.setClosedSessionId(getCurrentSessionId())
+
+        if (isAdbConnected()) {
             closeWindows()
             delay(350L)
         } else {
@@ -782,13 +834,7 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
             delay(200L)
         }
 
-        val intent = Intent(this@AutoLaunchAccessibilityService, PresetLauncherActivity::class.java)
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        intent.putExtra("id", presetId)
-        val options = ActivityOptions.makeCustomAnimation(this, 0, 0)
-        withContext(Dispatchers.Main) {
-            startActivity(intent, options.toBundle())
-        }
+        startPresetLauncher { putExtra("id", presetId) }
     }
 
     private suspend fun replaceSplit(
@@ -800,9 +846,9 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
         darkBackground: Int,
         windowShift: Int
     ) {
-        stateKeeper.setInProcessClosingWindows(true, getCurrentSessionId())
+        stateKeeper.setClosedSessionId(getCurrentSessionId())
 
-        if (enableAdbHelper && enableAdbOverlayFun) {
+        if (isAdbConnected()) {
             closeWindows()
             delay(350L)
         } else {
@@ -816,23 +862,24 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
             delay(200L)
         }
 
-        val intent = Intent(this@AutoLaunchAccessibilityService, PresetLauncherActivity::class.java)
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        intent.putExtra("first_package", firstPackage)
-        intent.putExtra("second_package", secondPackage)
-        intent.putExtra("first_auto_play", firstAutoPlay)
-        intent.putExtra("second_auto_play", secondAutoPlay)
-        intent.putExtra("type", type)
-        intent.putExtra("dark_background", darkBackground)
-        intent.putExtra("window_shift", windowShift)
-        val options = ActivityOptions.makeCustomAnimation(this, 0, 0)
-        withContext(Dispatchers.Main) {
-            startActivity(intent, options.toBundle())
+        startPresetLauncher {
+            putExtra("first_package", firstPackage)
+            putExtra("second_package", secondPackage)
+            putExtra("first_auto_play", firstAutoPlay)
+            putExtra("second_auto_play", secondAutoPlay)
+            putExtra("type", type)
+            putExtra("dark_background", darkBackground)
+            putExtra("window_shift", windowShift)
         }
     }
 
-    private suspend fun launchLast() {
-        stateKeeper.setInProcessClosingWindows(true, getCurrentSessionId())
+    private suspend fun launchLast(fromPresetPanel: Boolean) {
+        if (fromPresetPanel && !awaitPresetPanelCoveredWindows()) {
+            startPresetLauncher { putExtra("launch_last", true) }
+            return
+        }
+
+        stateKeeper.setClosedSessionId(getCurrentSessionId())
 
         // focus window before closing
         _freeFormWindows.value.first?.let {
@@ -843,9 +890,25 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
         closeWindows()
         delay(200L)
 
+        startPresetLauncher { putExtra("launch_last", true) }
+    }
+
+    // The windows return to the window list after the preset panel closes. Returns true if a split is open
+    private suspend fun awaitPresetPanelCoveredWindows(): Boolean {
+        val coveredPackages = presetPanelCoveredPackages
+        if (coveredPackages.isEmpty()) return false
+
+        withTimeoutOrNull(AWAIT_TIMEOUT) { stateKeeper.presetPanelShown.first { !it } }
+        withTimeoutOrNull(HIDDEN_WINDOW_AWAIT_TIMEOUT) {
+            shownWindows.first { windows -> windows.map { it.packageName }.containsAll(coveredPackages) }
+        }
+        return shownWindows.first().isNotEmpty()
+    }
+
+    private suspend fun startPresetLauncher(extras: Intent.() -> Unit) {
         val intent = Intent(this@AutoLaunchAccessibilityService, PresetLauncherActivity::class.java)
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        intent.putExtra("launch_last", true)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            .apply(extras)
         val options = ActivityOptions.makeCustomAnimation(this, 0, 0)
         withContext(Dispatchers.Main) {
             startActivity(intent, options.toBundle())
@@ -853,10 +916,10 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
     }
 
     private suspend fun closeCurrentWindowsTask(postAction: suspend () -> Unit) {
-        stateKeeper.setInProcessClosingWindows(true, getCurrentSessionId())
+        stateKeeper.setClosedSessionId(getCurrentSessionId())
 
         val (first, second) = _freeFormWindows.value
-        if (first != null || second != null) {
+        if (first != null || second != null || _freePresetWindows.value.isNotEmpty()) {
             closeWindows()
             delay(200L)
         }

@@ -3,16 +3,13 @@ package com.salat.settings.closingOverlay.presentation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -39,10 +36,13 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.salat.preferences.BuildConfig
 import com.salat.resources.R
+import com.salat.settings.common.presentation.RenderGroupCaption
 import com.salat.settings.common.presentation.RenderGroupDivider
 import com.salat.settings.common.presentation.RenderGroupTitle
 import com.salat.settings.common.presentation.RenderIconMenuDivider
-import com.salat.settings.common.presentation.RenderSliderTitle
+import com.salat.settings.common.presentation.RenderSettingsContent
+import com.salat.settings.common.presentation.RenderSettingsGroup
+import com.salat.settings.common.presentation.RenderSliderSetting
 import com.salat.settings.common.presentation.RenderToolbar
 import com.salat.settings.common.presentation.components.AccessibilityServiceRequireDialog
 import com.salat.settings.common.presentation.toDecimalSecondString
@@ -51,6 +51,7 @@ import com.salat.ui.rememberPainterResource
 import com.salat.uikit.component.ConfirmDialog
 import com.salat.uikit.component.RenderSettingsButton
 import com.salat.uikit.component.RenderSwitcher
+import com.salat.uikit.component.SettingsDefaults
 import com.salat.uikit.component.TopShadow
 import com.salat.uikit.component.ValueSlider
 import com.salat.uikit.preview.PreviewScreen
@@ -93,6 +94,7 @@ internal fun SettingsClosingOverlayScreen(
         ConfirmDialog(
             title = stringResource(R.string.reset_position),
             message = stringResource(R.string.confirm_reset_overlay_position),
+            okButtonTitle = stringResource(R.string.reset),
             uiScale = state.uiScale,
             negativeAction = true,
             onCancel = { resetPositionDialog = false },
@@ -120,15 +122,8 @@ internal fun SettingsClosingOverlayScreen(
         ) {
             TopShadow()
 
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(AppTheme.colors.surfaceSettingsLayer1)
-                ) {
+            RenderSettingsContent {
+                RenderSettingsGroup {
                     RenderGroupTitle(stringResource(R.string.general))
 
                     RenderSwitcher(
@@ -181,22 +176,12 @@ internal fun SettingsClosingOverlayScreen(
                     Spacer(Modifier.height(12.dp))
 
                     // Size
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(AppTheme.colors.surfaceSettingsLayer1)
-                    ) {
-                        RenderSliderTitle(
-                            stringResource(R.string.overlay_size)
-                        )
-
-                        Row(
-                            modifier = Modifier
-                                .padding(horizontal = 20.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    RenderSettingsGroup {
+                        RenderSliderSetting(
+                            title = stringResource(R.string.overlay_size),
+                            value = state.overlayScale.toDoubleString(2)
                         ) {
                             ValueSlider(
-                                modifier = Modifier.weight(1f),
                                 value = state.overlayScale,
                                 valueRange = 0.3f..MAX_SCALE,
                                 onValueChange = { newValue ->
@@ -205,13 +190,6 @@ internal fun SettingsClosingOverlayScreen(
                                 defaultMark = BuildConfig.OVERLAY_SCALE,
                                 enabled = true,
                                 step = 0.05f
-                            )
-
-                            Text(
-                                modifier = Modifier.padding(start = 10.dp),
-                                text = state.overlayScale.toDoubleString(2),
-                                style = AppTheme.typography.screenTitle,
-                                color = AppTheme.colors.contentPrimary,
                             )
                         }
                     }
@@ -226,7 +204,7 @@ internal fun SettingsClosingOverlayScreen(
                         text = stringResource(R.string.preview),
                         style = AppTheme.typography.aboutText,
                         textAlign = TextAlign.Center,
-                        color = AppTheme.colors.contentPrimary.copy(.4f)
+                        color = AppTheme.colors.contentPrimary.copy(SettingsDefaults.SUBTITLE_ALPHA)
                     )
                     Spacer(Modifier.height(12.dp))
 
@@ -265,22 +243,12 @@ internal fun SettingsClosingOverlayScreen(
                     Spacer(Modifier.height(24.dp))
 
                     // Bg alpha
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(AppTheme.colors.surfaceSettingsLayer1)
-                    ) {
-                        RenderSliderTitle(
-                            stringResource(R.string.background_transparency)
-                        )
-
-                        Row(
-                            modifier = Modifier
-                                .padding(horizontal = 20.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    RenderSettingsGroup {
+                        RenderSliderSetting(
+                            title = stringResource(R.string.background_transparency),
+                            value = state.overlayBgAlpha.toDoubleString(2)
                         ) {
                             ValueSlider(
-                                modifier = Modifier.weight(1f),
                                 value = state.overlayBgAlpha,
                                 valueRange = 0f..1f,
                                 onValueChange = { newValue ->
@@ -290,13 +258,6 @@ internal fun SettingsClosingOverlayScreen(
                                 enabled = true,
                                 step = 0.05f
                             )
-
-                            Text(
-                                modifier = Modifier.padding(start = 10.dp),
-                                text = state.overlayBgAlpha.toDoubleString(2),
-                                style = AppTheme.typography.screenTitle,
-                                color = AppTheme.colors.contentPrimary,
-                            )
                         }
                     }
 
@@ -304,22 +265,12 @@ internal fun SettingsClosingOverlayScreen(
                     Spacer(Modifier.height(12.dp))
 
                     // Icon alpha
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(AppTheme.colors.surfaceSettingsLayer1)
-                    ) {
-                        RenderSliderTitle(
-                            stringResource(R.string.icon_transparency)
-                        )
-
-                        Row(
-                            modifier = Modifier
-                                .padding(horizontal = 20.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    RenderSettingsGroup {
+                        RenderSliderSetting(
+                            title = stringResource(R.string.icon_transparency),
+                            value = state.overlayIconAlpha.toDoubleString(2)
                         ) {
                             ValueSlider(
-                                modifier = Modifier.weight(1f),
                                 value = state.overlayIconAlpha,
                                 valueRange = 0f..1f,
                                 onValueChange = { newValue ->
@@ -329,24 +280,13 @@ internal fun SettingsClosingOverlayScreen(
                                 enabled = true,
                                 step = 0.05f
                             )
-
-                            Text(
-                                modifier = Modifier.padding(start = 10.dp),
-                                text = state.overlayIconAlpha.toDoubleString(2),
-                                style = AppTheme.typography.screenTitle,
-                                color = AppTheme.colors.contentPrimary,
-                            )
                         }
                     }
 
                     RenderGroupDivider()
                     Spacer(Modifier.height(18.dp))
 
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(AppTheme.colors.surfaceSettingsLayer1)
-                    ) {
+                    RenderSettingsGroup {
                         RenderGroupTitle(stringResource(R.string.other))
 
                         RenderSwitcher(
@@ -365,22 +305,12 @@ internal fun SettingsClosingOverlayScreen(
 
                     // Window closing extra pause
                     if (state.closeWindowSequential == false) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .background(AppTheme.colors.surfaceSettingsLayer1)
-                        ) {
-                            RenderSliderTitle(
-                                stringResource(R.string.window_closing_pause)
-                            )
-
-                            Row(
-                                modifier = Modifier
-                                    .padding(horizontal = 20.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                        RenderSettingsGroup {
+                            RenderSliderSetting(
+                                title = stringResource(R.string.window_closing_pause),
+                                value = state.windowClosingExtraPause.toDecimalSecondString(context, 2)
                             ) {
                                 ValueSlider(
-                                    modifier = Modifier.weight(1f),
                                     value = state.windowClosingExtraPause,
                                     valueRange = 0..2000,
                                     onValueChange = { newValue ->
@@ -394,26 +324,12 @@ internal fun SettingsClosingOverlayScreen(
                                     enabled = true,
                                     step = 10
                                 )
-
-                                Text(
-                                    modifier = Modifier.padding(start = 10.dp),
-                                    text = state.windowClosingExtraPause.toDecimalSecondString(context, 2),
-                                    style = AppTheme.typography.screenTitle,
-                                    color = AppTheme.colors.contentPrimary,
-                                )
                             }
                         }
 
                         RenderGroupDivider()
 
-                        Text(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 20.dp, vertical = 6.dp),
-                            text = stringResource(R.string.window_closing_pause_desc),
-                            style = AppTheme.typography.aboutText,
-                            color = AppTheme.colors.contentPrimary.copy(.4f)
-                        )
+                        RenderGroupCaption(stringResource(R.string.window_closing_pause_desc))
                     }
                 }
                 Spacer(Modifier.height(36.dp))

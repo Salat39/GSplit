@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.PopupProperties
 import com.salat.resources.R
+import com.salat.settings.list.presentation.entity.DisplayPresetType
 import com.salat.settings.list.presentation.entity.DisplaySplitPreset
 import com.salat.settings.list.presentation.entity.RenderListType
 import com.salat.ui.rememberIsLandscape
@@ -48,7 +49,9 @@ internal fun ListMenu(
     onSetDarkBackground: (id: Long, enable: Boolean) -> Unit,
     onSetWindowShift: (id: Long, enable: Boolean) -> Unit,
     onSetQuickAccess: (id: Long, enable: Boolean) -> Unit,
-    uiScaleState: State<Float>?
+    onReorder: (() -> Unit)?,
+    uiScaleState: State<Float>?,
+    showWindowShift: Boolean = true
 ) {
     itemState.value?.let { (type, item) ->
         fun onClose() {
@@ -56,6 +59,7 @@ internal fun ListMenu(
         }
 
         val isLandscape = rememberIsLandscape()
+        val isFree = item.type == DisplayPresetType.FREE
 
         BackHandler(onBack = ::onClose)
 
@@ -88,28 +92,22 @@ internal fun ListMenu(
                                 .background(AppTheme.colors.surfaceMenu, border)
                         ) {
                             val context = LocalContext.current
-                            OptionsMenuItem(
-                                R.drawable.ic_open_window,
-                                buildString {
-                                    append(item.firstApp.title)
-                                    append(" ")
-                                    append(stringResource(R.string.settings).lowercase())
-                                }
-                            ) {
-                                onClose()
-                                context.openAppSystemSettings(item.firstApp.packageName)
-                            }
+                            val menuApps = if (isFree) {
+                                item.windows.map { it.app }.distinctBy { it.packageName }
+                            } else listOf(item.firstApp, item.secondApp)
 
-                            OptionsMenuItem(
-                                R.drawable.ic_open_window,
-                                buildString {
-                                    append(item.secondApp.title)
-                                    append(" ")
-                                    append(stringResource(R.string.settings).lowercase())
+                            menuApps.forEach { app ->
+                                OptionsMenuItem(
+                                    R.drawable.ic_open_window,
+                                    buildString {
+                                        append(app.title)
+                                        append(" ")
+                                        append(stringResource(R.string.settings).lowercase())
+                                    }
+                                ) {
+                                    onClose()
+                                    context.openAppSystemSettings(app.packageName)
                                 }
-                            ) {
-                                onClose()
-                                context.openAppSystemSettings(item.secondApp.packageName)
                             }
 
                             if (type == RenderListType.PRESET) {
@@ -149,7 +147,7 @@ internal fun ListMenu(
                                         onSetDarkBackground(item.id, true)
                                     }
                                 }
-                                if (!isLandscape) {
+                                if (!isLandscape && !isFree && showWindowShift) {
                                     if (item.bottomWindowShift) {
                                         OptionsMenuItem(R.drawable.ic_shift_down, R.string.disable_shift, scale = .9f) {
                                             onClose()
@@ -181,6 +179,12 @@ internal fun ListMenu(
                                 OptionsMenuItem(R.drawable.ic_edit, R.string.edit, scale = .9f) {
                                     onClose()
                                     onEdit(item.id, item.type.id)
+                                }
+                                onReorder?.let { reorder ->
+                                    OptionsMenuItem(R.drawable.ic_reorder, R.string.reorder_presets) {
+                                        onClose()
+                                        reorder()
+                                    }
                                 }
                                 OptionsMenuItem(R.drawable.ic_delete, R.string.delete) {
                                     onClose()

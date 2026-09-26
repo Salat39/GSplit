@@ -6,12 +6,12 @@ object ProjectConfig {
     const val APPLICATION_ID = "com.salat.gsplit"
 
     const val MIN_SDK = 26
-    const val TARGET_SDK = 34
-    const val COMPILE_SDK = 34
+    const val TARGET_SDK = 36
+    const val COMPILE_SDK = 36
 
-    const val VERSION_MAJOR = 2
+    const val VERSION_MAJOR = 3
     const val VERSION_MINOR = 0
-    const val VERSION_PATCH = 5
+    const val VERSION_PATCH = 0
     const val VERSION_FIX = 0
 
     const val VERSION_POSTFIX =

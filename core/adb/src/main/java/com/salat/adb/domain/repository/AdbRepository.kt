@@ -1,5 +1,6 @@
 package com.salat.adb.domain.repository
 
+import android.graphics.Rect
 import com.salat.adb.data.entity.AdbConnectionState
 import com.salat.adb.data.entity.AdbRecentTaskInfo
 import kotlinx.coroutines.flow.StateFlow
@@ -8,6 +9,8 @@ interface AdbRepository {
     val connectionState: StateFlow<AdbConnectionState>
 
     suspend fun execute(command: String): String
+
+    suspend fun ensureConnected(): Boolean
 
     suspend fun isAppInFreeform(packageName: String): Boolean?
 
@@ -21,6 +24,8 @@ interface AdbRepository {
 
     suspend fun allowActivateVpnAppOp(packageName: String): String
 
+    suspend fun applyRequiredSystemSettings(packageName: String): String
+
     suspend fun enablePackage(packageName: String): String
 
     suspend fun enableAndLaunchApp(packageName: String, launchActivity: String?): String
@@ -28,6 +33,8 @@ interface AdbRepository {
     suspend fun disableUserPackage(packageName: String): String
 
     suspend fun minimize(taskId: Int)
+
+    suspend fun resizeNewTask(packageName: String, bounds: Rect): Boolean
 
     suspend fun getForegroundAppPackageName(): String?
 

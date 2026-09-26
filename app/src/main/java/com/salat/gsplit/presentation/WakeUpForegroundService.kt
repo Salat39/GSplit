@@ -7,13 +7,12 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
-import android.net.ConnectivityManager
-import android.net.Network
-import android.net.NetworkCapabilities
-import android.net.NetworkRequest
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.SystemClock
 import androidx.core.app.NotificationCompat
+import androidx.core.app.ServiceCompat
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import com.salat.gsplit.PresetLauncherActivity
 import com.salat.gsplit.presentation.entity.LocalBroadcastEvent
@@ -32,10 +31,10 @@ import dagger.hilt.android.AndroidEntryPoint
 import java.io.IOException
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
+import kotlin.coroutines.resume
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
@@ -61,7 +60,7 @@ import timber.log.Timber
 @AndroidEntryPoint
 class WakeUpForegroundService : Service() {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private var bootJob: Job? = null
 
     private var actionReceiver: BroadcastReceiver? = null
     private var actionManager: LocalBroadcastManager? = null
@@ -93,17 +92,28 @@ class WakeUpForegroundService : Service() {
     }
 
     companion object {
+        const val EXTRA_AFTER_PAUSE = "after_pause"
+
         private const val CHANNEL_ID = "wake_up_service_channel"
         private const val PING_URL = "https://clients3.google.com/generate_204"
 
-        private const val CONNECTION_CHECK_LOOP_DELAY = 300L
-        private const val PING_TIMEOUT = 1500L
+        private const val CONNECTION_CHECK_LOOP_DELAY = 1000L
+        private const val SLOW_CONNECTION_CHECK_LOOP_DELAY = 5000L
+        private const val FAST_CONNECTION_CHECK_PERIOD = 60_000L
+        private const val PING_TIMEOUT = 3000L
     }
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
         initActionManager()
+    }
+
+    // Android 15 does not let a media playback service start after boot
+    private fun foregroundServiceType() = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+        ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
+    } else {
+        ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -115,9 +125,20 @@ class WakeUpForegroundService : Service() {
             .setPriority(NotificationCompat.PRIORITY_MIN)
             .build()
 
-        startForeground(1, notification)
+        try {
+            ServiceCompat.startForeground(this, 1, notification, foregroundServiceType())
+        } catch (e: Exception) {
+            // A start without a background exemption throws on Android 12+
+            Timber.e(e)
+            stopSelf()
+            return START_NOT_STICKY
+        }
 
-        serviceScope.launch {
+        if (bootJob?.isActive == true) return START_STICKY
+
+        // A living MainActivity has no autostart left, so a relaunch after a pause goes without UI
+        val afterPause = intent?.getBooleanExtra(EXTRA_AFTER_PAUSE, false) == true
+        bootJob = serviceScope.launch {
             val prefData = dataStore.getAnyPrefsFlow(
                 BoolPref.SelfAutostart,
                 BoolPref.SelfAutostartInBg,
@@ -130,7 +151,7 @@ class WakeUpForegroundService : Service() {
             ).firstOrNull() ?: return@launch
 
             val autostart = prefData[0] as Boolean
-            val autostartInBg = prefData[1] as Boolean
+            val autostartInBg = prefData[1] as Boolean || afterPause
             val autostartByConnect = prefData[2] as Boolean
             val autostartDelay = (prefData[3] as Int).toLong()
             ymCompatMode = prefData[4] as Boolean
@@ -145,9 +166,8 @@ class WakeUpForegroundService : Service() {
             val extraLaunchQueue = schedulers.getSchedulers()
 
             if (autostartByConnect) {
-                initNetworkHandler(this@WakeUpForegroundService) {
+                waitForInternet {
                     doBootJob(autostartInBg, autostartDelay, extraLaunchQueue)
-                    Timber.d("[CONNECTIVITY MANAGER] Internet confirmed")
                 }
             } else {
                 doBootJob(autostartInBg, autostartDelay, extraLaunchQueue)
@@ -303,69 +323,18 @@ class WakeUpForegroundService : Service() {
         startActivity(noUiLaunch)
     }
 
-    /**
-     * Tracks the global status of device's Internet connection
-     */
-    private fun CoroutineScope.initNetworkHandler(context: Context, onConnected: suspend () -> Unit) = launch {
-        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-
-        val networkRequest = NetworkRequest.Builder()
-            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
-            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
-            .addTransportType(NetworkCapabilities.TRANSPORT_CELLULAR)
-            .build()
-
-        networkCallback = object : ConnectivityManager.NetworkCallback() {
-            private val availableNetworks: MutableSet<Network> = HashSet()
-            private var internetCheckJob: Job? = null
-
-            // Flag to ensure onConnected is called only once
-            private var hasCalledConnected = false
-
-            override fun onAvailable(network: Network) {
-                availableNetworks.add(network)
-                startChecking(network, cm, onConnected)
-            }
-
-            override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
-                if (networkCapabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)) {
-                    startChecking(network, cm, onConnected)
-                }
-            }
-
-            override fun onLost(network: Network) {
-                availableNetworks.remove(network)
-                if (availableNetworks.isEmpty()) {
-                    internetCheckJob?.cancel()
-                    internetCheckJob = null
-                }
-            }
-
-            private fun startChecking(network: Network, cm: ConnectivityManager, onConnected: suspend () -> Unit) {
-                // If onConnected has already been called or a check is already running for this network, do nothing
-                if (hasCalledConnected || (internetCheckJob?.isActive == true)) return
-
-                // Start a recurring check with a short delay (300 ms)
-                internetCheckJob = serviceScope.launch {
-                    while (isActive) {
-                        val capabilities = cm.getNetworkCapabilities(network)
-                        if (capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true &&
-                            isInternetAvailable()
-                        ) {
-                            hasCalledConnected = true
-                            onConnected()
-                            break
-                        }
-                        delay(CONNECTION_CHECK_LOOP_DELAY) // Small delay to minimize load
-                    }
-                }
-            }
+    // Real HTTP probe - system network validation does not see internet that comes through a VPN tunnel
+    private fun CoroutineScope.waitForInternet(onConnected: suspend () -> Unit) = launch {
+        val startedAt = SystemClock.elapsedRealtime()
+        while (isActive && !isInternetAvailable()) {
+            val fastPeriodOver = SystemClock.elapsedRealtime() - startedAt > FAST_CONNECTION_CHECK_PERIOD
+            delay(if (fastPeriodOver) SLOW_CONNECTION_CHECK_LOOP_DELAY else CONNECTION_CHECK_LOOP_DELAY)
         }
-
-        cm.registerNetworkCallback(networkRequest, networkCallback!!)
+        if (!isActive) return@launch
+        Timber.d("[INTERNET CHECK] Internet confirmed")
+        onConnected()
     }
 
-    @OptIn(ExperimentalCoroutinesApi::class)
     private suspend fun isInternetAvailable(): Boolean = withTimeoutOrNull(PING_TIMEOUT) {
         suspendCancellableCoroutine { cont ->
             val request = Request.Builder()
@@ -376,11 +345,11 @@ class WakeUpForegroundService : Service() {
             cont.invokeOnCancellation { call.cancel() }
             call.enqueue(object : okhttp3.Callback {
                 override fun onFailure(call: okhttp3.Call, e: IOException) {
-                    if (!cont.isCompleted) cont.resume(false) {}
+                    if (!cont.isCompleted) cont.resume(false)
                 }
 
                 override fun onResponse(call: okhttp3.Call, response: okhttp3.Response) {
-                    if (!cont.isCompleted) cont.resume(response.code == 204) {}
+                    response.use { if (!cont.isCompleted) cont.resume(it.code == 204) }
                 }
             })
         }
@@ -428,14 +397,6 @@ class WakeUpForegroundService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        networkCallback?.let { callback ->
-            try {
-                val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-                cm.unregisterNetworkCallback(callback)
-            } catch (e: Exception) {
-                Timber.e(e)
-            }
-        }
         actionReceiver?.let { actionManager?.unregisterReceiver(it) }
         serviceScope.cancel()
     }

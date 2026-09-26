@@ -11,7 +11,7 @@ sealed class AccessibilityServiceEvent {
         val autoPlay: Boolean
     ) : AccessibilityServiceEvent()
 
-    data class ReplacePreset(val presetId: Long) : AccessibilityServiceEvent()
+    data class ReplacePreset(val presetId: Long, val fromPresetPanel: Boolean = false) : AccessibilityServiceEvent()
 
     data class ReplaceSplit(
         val firstPackage: String,
@@ -23,7 +23,7 @@ sealed class AccessibilityServiceEvent {
         val windowShift: Int
     ) : AccessibilityServiceEvent()
 
-    data object LaunchLast : AccessibilityServiceEvent()
+    data class LaunchLast(val fromPresetPanel: Boolean = false) : AccessibilityServiceEvent()
 
     data class CloseCurrentWindows(val postAction: suspend () -> Unit) : AccessibilityServiceEvent()
 }

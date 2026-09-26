@@ -2,7 +2,10 @@ package com.salat.ui
 
 import android.content.res.Configuration
 import android.graphics.Rect
+import android.os.Build
+import android.util.DisplayMetrics
 import android.view.ViewTreeObserver
+import android.view.WindowManager
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
@@ -35,13 +38,16 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.VectorPainter
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.vectorResource
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import com.salat.entity.SystemInsets
+import kotlin.math.roundToInt
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
@@ -161,6 +167,27 @@ fun rememberSystemInsets(): State<SystemInsets> {
                 bottom = navBarHeight
             )
         }
+    }
+}
+
+// Android 15 adds the system bars to the Configuration screen size
+@Composable
+fun rememberAvailableScreenSize(): DpSize {
+    val context = LocalContext.current
+    val configuration = LocalConfiguration.current
+    return remember(configuration) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            return@remember DpSize(configuration.screenWidthDp.dp, configuration.screenHeightDp.dp)
+        }
+        val metrics = context.getSystemService(WindowManager::class.java).currentWindowMetrics
+        val insets = metrics.windowInsets.getInsetsIgnoringVisibility(
+            android.view.WindowInsets.Type.systemBars() or android.view.WindowInsets.Type.displayCutout()
+        )
+        val density = configuration.densityDpi.toFloat() / DisplayMetrics.DENSITY_DEFAULT
+        DpSize(
+            width = ((metrics.bounds.width() - insets.left - insets.right) / density).roundToInt().dp,
+            height = ((metrics.bounds.height() - insets.top - insets.bottom) / density).roundToInt().dp
+        )
     }
 }
 

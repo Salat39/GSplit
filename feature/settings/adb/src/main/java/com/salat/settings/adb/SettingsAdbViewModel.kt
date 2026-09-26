@@ -9,8 +9,8 @@ import com.salat.preferences.domain.entity.IntPref
 import com.salat.preferences.domain.usecases.FlowPrefsUseCase
 import com.salat.preferences.domain.usecases.SaveBoolPrefUseCase
 import com.salat.preferences.domain.usecases.SaveIntPrefUseCase
-import com.salat.settings.adb.entity.DisplayAdbState
-import com.salat.settings.adb.mappers.toDisplayAdbState
+import com.salat.settings.common.presentation.entity.DisplayAdbState
+import com.salat.settings.common.presentation.mappers.toDisplayAdbState
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import kotlinx.coroutines.Dispatchers
@@ -34,7 +34,6 @@ class SettingsAdbViewModel @Inject constructor(
                 val collectedPreferences = flowPrefsUseCase.execute(
                     BoolPref.EnableAdbHelper,
                     BoolPref.EnableAdbForceStop,
-                    BoolPref.EnableAdbOverlayFun,
                     IntPref.AdbHelperPort,
                     FloatPref.UiScale
                 ).firstOrNull()
@@ -44,9 +43,8 @@ class SettingsAdbViewModel @Inject constructor(
                         Action.InitPrefs(
                             enableAdbHelper = prefs[0] as Boolean,
                             enableAdbForceStop = prefs[1] as Boolean,
-                            enableAdbOverlayFun = prefs[2] as Boolean,
-                            adbPort = prefs[3] as Int,
-                            uiScale = prefs[4] as Float
+                            adbPort = prefs[2] as Int,
+                            uiScale = prefs[3] as Float
                         )
                     )
                 }
@@ -63,7 +61,6 @@ class SettingsAdbViewModel @Inject constructor(
         is Action.InitPrefs -> state.value.copy(
             enableAdbHelper = viewAction.enableAdbHelper,
             enableAdbForceStop = viewAction.enableAdbForceStop,
-            enableAdbOverlayFun = viewAction.enableAdbOverlayFun,
             adbHelperPort = viewAction.adbPort,
             uiScale = viewAction.uiScale
         )
@@ -82,13 +79,6 @@ class SettingsAdbViewModel @Inject constructor(
             state.value.copy(enableAdbForceStop = viewAction.value)
         }
 
-        is Action.SetEnableAdbOverlayFun -> {
-            viewModelScope.launch(Dispatchers.IO) {
-                saveBoolPrefUseCase.execute(BoolPref.EnableAdbOverlayFun, viewAction.value)
-            }
-            state.value.copy(enableAdbOverlayFun = viewAction.value)
-        }
-
         is Action.SetPort -> {
             viewModelScope.launch(Dispatchers.IO) {
                 saveIntPrefUseCase.execute(IntPref.AdbHelperPort, viewAction.port)
@@ -105,7 +95,6 @@ class SettingsAdbViewModel @Inject constructor(
     data class ViewState(
         val enableAdbHelper: Boolean = false,
         val enableAdbForceStop: Boolean = false,
-        val enableAdbOverlayFun: Boolean = false,
         val adbHelperPort: Int = -1,
         val adbConnectionState: DisplayAdbState = DisplayAdbState.Disconnected,
         val uiScale: Float = 1f,
@@ -115,7 +104,6 @@ class SettingsAdbViewModel @Inject constructor(
         class InitPrefs(
             val enableAdbHelper: Boolean,
             val enableAdbForceStop: Boolean,
-            val enableAdbOverlayFun: Boolean,
             val adbPort: Int,
             val uiScale: Float
         ) : Action()
@@ -123,8 +111,6 @@ class SettingsAdbViewModel @Inject constructor(
         data class SetEnableAdbHelper(val value: Boolean) : Action()
 
         data class SetEnableAdbForceStop(val value: Boolean) : Action()
-
-        data class SetEnableAdbOverlayFun(val value: Boolean) : Action()
 
         data class SetPort(val port: Int) : Action()
 

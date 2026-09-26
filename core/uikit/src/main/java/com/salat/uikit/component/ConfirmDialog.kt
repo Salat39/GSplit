@@ -1,22 +1,14 @@
 package com.salat.uikit.component
 
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.salat.uikit.theme.AppTheme
 import presentation.capitalizeFirstLetter
@@ -46,17 +38,10 @@ fun ConfirmDialog(
         maxWidth = 560,
         onDismiss = onDismiss
     ) {
-        Column(modifier = Modifier.padding(top = 22.dp)) {
+        Column(modifier = Modifier.padding(top = DialogTopPadding)) {
             // Title
             if (title.isNotEmpty()) {
-                Text(
-                    text = title,
-                    modifier = Modifier.padding(horizontal = 24.dp),
-                    color = AppTheme.colors.contentPrimary,
-                    style = AppTheme.typography.confirmDialogTitle,
-                    overflow = TextOverflow.Ellipsis,
-                    maxLines = 2
-                )
+                DialogTitle(title)
                 Spacer(modifier = Modifier.height(12.dp))
             } else {
                 Spacer(modifier = Modifier.height(2.dp))
@@ -66,50 +51,26 @@ fun ConfirmDialog(
             if (message.isNotEmpty()) {
                 Text(
                     text = message,
-                    modifier = Modifier.padding(horizontal = 24.dp),
+                    modifier = Modifier.padding(horizontal = DialogTextPadding),
                     color = AppTheme.colors.contentPrimary,
                     style = AppTheme.typography.dialogListTitle
                 )
-                Spacer(modifier = Modifier.height(if (isShort) 14.dp else 24.dp))
+                Spacer(modifier = Modifier.height(if (isShort) 4.dp else 12.dp))
             }
 
-            // Buttons
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 10.dp, end = 10.dp, bottom = 8.dp),
-                horizontalArrangement = Arrangement.End
-            ) {
+            DialogButtons {
                 if (!disableNegative) {
-                    // Cancel
-                    Text(
+                    DialogButton(
                         text = closeButtonTitle.ifEmpty {
                             stringResource(android.R.string.cancel).capitalizeFirstLetter()
                         },
-                        modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
-                            .clickable {
-                                onCancel()
-                            }
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        color = AppTheme.colors.contentAccent,
-                        style = AppTheme.typography.alertDialogButton
+                        onClick = onCancel
                     )
-                    Spacer(modifier = Modifier.width(8.dp))
                 }
-                // Ok
-                Text(
+                DialogButton(
                     text = okButtonTitle.ifEmpty { stringResource(android.R.string.ok) },
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable(onClick = onClick)
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    color = if (negativeAction) {
-                        AppTheme.colors.deleteButton.copy(alpha = .9f)
-                    } else {
-                        AppTheme.colors.contentAccent.copy(alpha = .9f)
-                    },
-                    style = AppTheme.typography.alertDialogButton
+                    kind = if (negativeAction) DialogButtonKind.Danger else DialogButtonKind.Accent,
+                    onClick = onClick
                 )
             }
         }

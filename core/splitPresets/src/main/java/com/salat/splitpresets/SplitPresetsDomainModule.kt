@@ -8,6 +8,7 @@ import com.salat.splitpresets.domain.usecases.GetPresetByIdUseCase
 import com.salat.splitpresets.domain.usecases.GetPresetFreeIdUseCase
 import com.salat.splitpresets.domain.usecases.GetPresetsFlowUseCase
 import com.salat.splitpresets.domain.usecases.GetPresetsUseCase
+import com.salat.splitpresets.domain.usecases.ReorderSplitPresetsUseCase
 import com.salat.splitpresets.domain.usecases.SetAutoStartSplitPresetUseCase
 import com.salat.splitpresets.domain.usecases.SetDarkBackgroundSplitPresetUseCase
 import com.salat.splitpresets.domain.usecases.SetQuickAccessSplitPresetUseCase
@@ -61,4 +62,7 @@ object SplitPresetsDomainModule {
     @Provides
     fun provideSetQuickAccessSplitPresetUseCase(repository: SplitPresetsRepository) =
         SetQuickAccessSplitPresetUseCase(repository)
+
+    @Provides
+    fun provideReorderSplitPresetsUseCase(repository: SplitPresetsRepository) = ReorderSplitPresetsUseCase(repository)
 }

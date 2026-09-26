@@ -43,11 +43,10 @@ class SettingsPresetsViewModel @Inject constructor(
                 BoolPref.MinimizeByStart,
                 BoolPref.MinimizeByAutostart,
                 BoolPref.AutoStartMinimizeDelay,
-                BoolPref.ContextAdaptiveSizes,
                 BoolPref.ExperimentalNativeSplit,
                 BoolPref.SoftKillApp,
-                BoolPref.StandbyMode,
-                IntPref.HeightCorrector
+                IntPref.HeightCorrector,
+                BoolPref.NoCaptionWindows
             ).firstOrNull()
 
             collectedPreferences?.let { prefs ->
@@ -59,11 +58,10 @@ class SettingsPresetsViewModel @Inject constructor(
                         minimizeByStart = prefs[3] as Boolean,
                         minimizeByAutostart = prefs[4] as Boolean,
                         autoStartMinimizeDelay = prefs[5] as Boolean,
-                        contextAdaptiveSizes = prefs[6] as Boolean,
-                        experimentalNativeSplit = prefs[7] as Boolean,
-                        softKillApp = prefs[8] as Boolean,
-                        standbyMode = prefs[9] as Boolean,
-                        heightCorrector = prefs[10] as Int
+                        experimentalNativeSplit = prefs[6] as Boolean,
+                        softKillApp = prefs[7] as Boolean,
+                        heightCorrector = prefs[8] as Int,
+                        noCaptionWindows = prefs[9] as Boolean
                     )
                 )
             }
@@ -131,16 +129,6 @@ class SettingsPresetsViewModel @Inject constructor(
             state.value.copy(autoStartMinimizeDelay = viewAction.value)
         }
 
-        is Action.SetContextAdaptiveSizes -> {
-            viewModelScope.launch(Dispatchers.IO) {
-                saveBoolPrefUseCase.execute(
-                    BoolPref.ContextAdaptiveSizes,
-                    viewAction.value ?: BoolPref.ContextAdaptiveSizes.default
-                )
-            }
-            state.value.copy(contextAdaptiveSizes = viewAction.value)
-        }
-
         is Action.SetExperimentalNativeSplit -> {
             viewModelScope.launch(Dispatchers.IO) {
                 saveBoolPrefUseCase.execute(
@@ -161,16 +149,6 @@ class SettingsPresetsViewModel @Inject constructor(
             state.value.copy(softKillApp = viewAction.value)
         }
 
-        is Action.SetStandbyMode -> {
-            viewModelScope.launch(Dispatchers.IO) {
-                saveBoolPrefUseCase.execute(
-                    BoolPref.StandbyMode,
-                    viewAction.value ?: BoolPref.StandbyMode.default
-                )
-            }
-            state.value.copy(standbyMode = viewAction.value)
-        }
-
         is Action.SetHeightCorrector -> {
             viewModelScope.launch(Dispatchers.IO) {
                 saveIntPrefUseCase.execute(
@@ -181,6 +159,16 @@ class SettingsPresetsViewModel @Inject constructor(
             state.value.copy(heightCorrector = viewAction.value)
         }
 
+        is Action.SetNoCaptionWindows -> {
+            viewModelScope.launch(Dispatchers.IO) {
+                saveBoolPrefUseCase.execute(
+                    BoolPref.NoCaptionWindows,
+                    viewAction.value ?: BoolPref.NoCaptionWindows.default
+                )
+            }
+            state.value.copy(noCaptionWindows = viewAction.value)
+        }
+
         is Action.InitPrefs -> state.value.copy(
             bypassDelay = viewAction.bypassDelay,
             secondWindowDelay = viewAction.secondWindowDelay,
@@ -188,11 +176,10 @@ class SettingsPresetsViewModel @Inject constructor(
             minimizeByStart = viewAction.minimizeByStart,
             minimizeByAutostart = viewAction.minimizeByAutostart,
             autoStartMinimizeDelay = viewAction.autoStartMinimizeDelay,
-            contextAdaptiveSizes = viewAction.contextAdaptiveSizes,
             experimentalNativeSplit = viewAction.experimentalNativeSplit,
             softKillApp = viewAction.softKillApp,
-            standbyMode = viewAction.standbyMode,
-            heightCorrector = viewAction.heightCorrector
+            heightCorrector = viewAction.heightCorrector,
+            noCaptionWindows = viewAction.noCaptionWindows
         )
     }
 
@@ -204,11 +191,10 @@ class SettingsPresetsViewModel @Inject constructor(
         val minimizeByStart: Boolean? = null,
         val minimizeByAutostart: Boolean? = null,
         val autoStartMinimizeDelay: Boolean? = null,
-        val contextAdaptiveSizes: Boolean? = null,
         val experimentalNativeSplit: Boolean? = null,
         val softKillApp: Boolean? = null,
-        val standbyMode: Boolean? = null,
         val heightCorrector: Int = DEFAULT_HEIGHT_CORRECTOR,
+        val noCaptionWindows: Boolean? = null
     ) : MviViewState
 
     sealed class Action : MviAction {
@@ -219,11 +205,10 @@ class SettingsPresetsViewModel @Inject constructor(
             val minimizeByStart: Boolean?,
             val minimizeByAutostart: Boolean?,
             val autoStartMinimizeDelay: Boolean?,
-            val contextAdaptiveSizes: Boolean?,
             val experimentalNativeSplit: Boolean?,
             val softKillApp: Boolean?,
-            val standbyMode: Boolean?,
-            val heightCorrector: Int
+            val heightCorrector: Int,
+            val noCaptionWindows: Boolean?
         ) : Action()
 
         internal class SetBypassDelay(val delay: Int) : Action()
@@ -238,14 +223,12 @@ class SettingsPresetsViewModel @Inject constructor(
 
         internal class SetAutoStartMinimizeDelay(val value: Boolean?) : Action()
 
-        internal class SetContextAdaptiveSizes(val value: Boolean?) : Action()
-
         internal class SetExperimentalNativeSplit(val value: Boolean?) : Action()
 
         internal class SetSoftKillApp(val value: Boolean?) : Action()
 
-        internal class SetStandbyMode(val value: Boolean?) : Action()
-
         internal class SetHeightCorrector(val value: Int) : Action()
+
+        internal class SetNoCaptionWindows(val value: Boolean?) : Action()
     }
 }

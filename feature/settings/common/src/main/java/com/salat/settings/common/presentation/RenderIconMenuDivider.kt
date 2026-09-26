@@ -7,16 +7,18 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.salat.uikit.component.SettingsDefaults
 import com.salat.uikit.theme.AppTheme
 
 @Composable
-fun RenderIconMenuDivider() {
+fun RenderIconMenuDivider(startPadding: Dp = SettingsDefaults.RowHorizontalPadding) {
     Spacer(
         Modifier
             .fillMaxWidth()
             .height(.8.dp)
-            .padding(start = 72.dp)
+            .padding(start = startPadding)
             .background(AppTheme.colors.surfaceSettings.copy(.4f))
     )
 }

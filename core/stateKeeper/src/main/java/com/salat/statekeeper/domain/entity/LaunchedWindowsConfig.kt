@@ -9,5 +9,7 @@ data class LaunchedWindowsConfig(
     val type: LaunchedSplitType,
     val presetId: Long,
     // launch time + session id
-    val sessionId: Long
+    val sessionId: Long,
+    val freeWindowPackages: List<String> = emptyList(),
+    val ratio: Float = .5f
 )

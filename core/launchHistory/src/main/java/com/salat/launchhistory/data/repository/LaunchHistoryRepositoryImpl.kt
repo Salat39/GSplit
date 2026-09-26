@@ -3,9 +3,11 @@ package com.salat.launchhistory.data.repository
 import com.salat.launchhistory.data.entity.LastLaunchedAppDto
 import com.salat.launchhistory.data.entity.LastLaunchedTaskDto
 import com.salat.launchhistory.data.entity.LastLaunchedTypeDto
+import com.salat.launchhistory.data.entity.LastLaunchedWindowDto
 import com.salat.launchhistory.domain.entity.LastLaunchedApp
 import com.salat.launchhistory.domain.entity.LastLaunchedTask
 import com.salat.launchhistory.domain.entity.LastLaunchedType
+import com.salat.launchhistory.domain.entity.LastLaunchedWindow
 import com.salat.launchhistory.domain.repository.LaunchHistoryRepository
 import com.salat.preferences.domain.DataStoreRepository
 import com.salat.preferences.domain.entity.StringPref
@@ -95,9 +97,20 @@ class LaunchHistoryRepositoryImpl(private val dataStore: DataStoreRepository) : 
             autoStart = this.autoStart,
             darkBackground = this.darkBackground,
             bottomWindowShift = this.bottomWindowShift,
-            id = this.id
+            id = this.id,
+            windows = this.windows.map { it.toDomain() },
+            ratio = this.ratio
         )
     }
+
+    private fun LastLaunchedWindowDto.toDomain() = LastLaunchedWindow(
+        app = app.toDomain(),
+        left = left,
+        top = top,
+        right = right,
+        bottom = bottom,
+        alwaysOnTop = alwaysOnTop
+    )
 
     private fun LastLaunchedAppDto.toDomain(): LastLaunchedApp {
         return LastLaunchedApp(
@@ -119,9 +132,20 @@ class LaunchHistoryRepositoryImpl(private val dataStore: DataStoreRepository) : 
             autoStart = this.autoStart,
             darkBackground = this.darkBackground,
             bottomWindowShift = this.bottomWindowShift,
-            id = this.id
+            id = this.id,
+            windows = this.windows.map { it.toDto() },
+            ratio = this.ratio
         )
     }
+
+    private fun LastLaunchedWindow.toDto() = LastLaunchedWindowDto(
+        app = app.toDto(),
+        left = left,
+        top = top,
+        right = right,
+        bottom = bottom,
+        alwaysOnTop = alwaysOnTop
+    )
 
     private fun LastLaunchedApp.toDto(): LastLaunchedAppDto {
         return LastLaunchedAppDto(

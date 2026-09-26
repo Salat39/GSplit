@@ -1,6 +1,6 @@
+.*
+*.md
 *.iml
-.gradle
-.kotlin
 /local.properties
 /.idea/*
 !/.idea/codeStyles/
@@ -9,9 +9,8 @@
 !/.idea/codeInsightSettings.xml
 !/.idea/kotlinCodeInsightSettings.xml
 !/.idea/encodings.xml
-.DS_Store
 /build
 /captures
-.externalNativeBuild
-.cxx
 local.properties
+!README.md
+!.gitlab-ci.yml

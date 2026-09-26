@@ -1,5 +1,6 @@
 package com.salat.adb.data.repository
 
+import android.graphics.Rect
 import android.util.Base64
 import com.salat.adb.BuildConfig
 import com.salat.adb.data.entity.AdbConnectionState
@@ -31,6 +32,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import timber.log.Timber
 
 class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbRepository {
@@ -39,6 +41,9 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
         private const val TIMEOUT_MS = 5_000
         private const val RECONNECT_DELAY_MS = 3_000L
         private const val MAX_RECONNECT_RETRIES = 5
+        private const val CONNECT_AWAIT_MS = 6_000L
+        private const val NEW_TASK_LOOKUP_ATTEMPTS = 15
+        private const val NEW_TASK_LOOKUP_INTERVAL_SEC = "0.05"
 
         private const val DONE_PREFIX = "__ADB_DONE__:"
     }
@@ -404,6 +409,13 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
         return execute("appops set $pkg ACTIVATE_VPN allow")
     }
 
+    override suspend fun applyRequiredSystemSettings(packageName: String) = execute(
+        "settings put global development_settings_enabled 1; " +
+            "settings put global enable_freeform_support 1; " +
+            "settings put global force_resizable_activities 1; " +
+            "appops set $packageName SYSTEM_ALERT_WINDOW allow"
+    )
+
     override suspend fun enableAndLaunchApp(packageName: String, launchActivity: String?): String {
         val pkg = packageName.trim()
         if (pkg.isEmpty() || pkg.equals("unknown", ignoreCase = true) || !isValidPackageName(pkg)) {
@@ -436,6 +448,41 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
     override suspend fun minimize(taskId: Int) {
         if (taskId == -1 || taskId == 0) return
         execute("am stack remove $taskId")
+    }
+
+    override suspend fun ensureConnected(): Boolean {
+        if (_connectionState.value is AdbConnectionState.Connected) return true
+        if (!dataStore.getBooleanPrefFlow(BoolPref.EnableAdbHelper).first()) return false
+        if (reconnectJob?.isActive != true) ioScope.launch { reconnect() }
+        withTimeoutOrNull(CONNECT_AWAIT_MS) {
+            var attemptSeen = false
+            _connectionState.first { state ->
+                when (state) {
+                    is AdbConnectionState.Connected -> true
+                    is AdbConnectionState.Connecting -> {
+                        attemptSeen = true
+                        false
+                    }
+                    // Error or Disconnected after an attempt means the reconnect failed
+                    else -> attemptSeen
+                }
+            }
+        }
+        return _connectionState.value is AdbConnectionState.Connected
+    }
+
+    // Task ids grow with each new task, so the largest id is the task that was just started
+    override suspend fun resizeNewTask(packageName: String, bounds: Rect): Boolean {
+        val pkg = packageName.trim()
+        if (pkg.isEmpty() || !isValidPackageName(pkg)) return false
+        val findTaskId = "dumpsys activity activities | grep -E 'Task\\{.*$pkg' | " +
+            "grep -o -E '#[0-9]+' | tr -d '#' | sort -n | tail -1"
+        val resize = "am task resize \"\$i\" ${bounds.left} ${bounds.top} ${bounds.right} ${bounds.bottom}"
+        val script = "n=0; r=; " +
+            "while [ \$n -lt $NEW_TASK_LOOKUP_ATTEMPTS ]; do i=\$($findTaskId); " +
+            "if [ -n \"\$i\" ]; then $resize && r=\$i; break; fi; " +
+            "n=\$((n+1)); sleep $NEW_TASK_LOOKUP_INTERVAL_SEC; done; echo \"RESIZED=\$r\""
+        return execute(script).contains(Regex("RESIZED=\\d+"))
     }
 
     @Suppress("ReturnCount")

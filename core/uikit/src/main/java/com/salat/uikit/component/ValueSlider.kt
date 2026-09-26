@@ -1,16 +1,28 @@
 package com.salat.uikit.component
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -19,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.salat.uikit.theme.AppTheme
 import kotlin.math.roundToInt
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Suppress("UNCHECKED_CAST")
 @Composable
 fun <T> ValueSlider(
@@ -42,17 +55,7 @@ fun <T> ValueSlider(
         disabledActiveTrackColor = AppTheme.colors.sliderPassive,
         disabledInactiveTrackColor = AppTheme.colors.sliderPassive
     )
-    // Replace default track with transparent colors to draw everything in Canvas
-    val sliderColors = SliderDefaults.colors(
-        thumbColor = if (enabled) AppTheme.colors.contentAccent else AppTheme.colors.sliderPassive,
-        activeTrackColor = Color.Transparent,
-        inactiveTrackColor = Color.Transparent,
-        activeTickColor = Color.Transparent,
-        inactiveTickColor = Color.Transparent,
-        disabledThumbColor = AppTheme.colors.sliderPassive,
-        disabledActiveTrackColor = Color.Transparent,
-        disabledInactiveTrackColor = Color.Transparent
-    )
+    val thumbColor = if (enabled) AppTheme.colors.contentAccent else AppTheme.colors.sliderPassive
 
     val minValue = valueRange.start.toFloat()
     val maxValue = valueRange.endInclusive.toFloat()
@@ -157,8 +160,34 @@ fun <T> ValueSlider(
             },
             enabled = enabled,
             interactionSource = interactionSource,
-            colors = sliderColors,
-            steps = discreteSteps
+            steps = discreteSteps,
+            thumb = {
+                SliderThumb(
+                    interactionSource = interactionSource,
+                    color = thumbColor,
+                    enabled = enabled
+                )
+            },
+            track = { Spacer(Modifier.fillMaxWidth()) }
         )
     }
+}
+
+@Composable
+private fun SliderThumb(interactionSource: MutableInteractionSource, color: Color, enabled: Boolean) {
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val isDragged by interactionSource.collectIsDraggedAsState()
+    val elevation = when {
+        !enabled -> 0.dp
+        isPressed || isDragged -> 6.dp
+        else -> 1.dp
+    }
+    Spacer(
+        Modifier
+            .size(20.dp)
+            .indication(interactionSource, ripple(bounded = false, radius = 20.dp))
+            .hoverable(interactionSource)
+            .shadow(elevation, CircleShape, clip = false)
+            .background(color, CircleShape)
+    )
 }

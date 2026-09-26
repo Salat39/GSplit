@@ -13,7 +13,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.salat.resources.R
@@ -36,16 +36,16 @@ fun RenderSwitcher(
             .clickable(value != null && enable) {
                 onChange(value?.let { !it } ?: true)
             }
+            .alpha(if (enable) 1f else SettingsDefaults.DISABLED_ALPHA)
             .padding(vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(
             Modifier
                 .weight(1f)
-                .then(if (!enable) Modifier.graphicsLayer { alpha = .25f } else Modifier)
+                .padding(horizontal = SettingsDefaults.RowHorizontalPadding)
         ) {
             Text(
-                modifier = Modifier.padding(horizontal = 23.dp),
                 text = title,
                 style = AppTheme.typography.screenTitle,
                 color = AppTheme.colors.contentPrimary
@@ -59,8 +59,7 @@ fun RenderSwitcher(
                 } else {
                     offSubtitle
                 },
-                modifier = Modifier.padding(horizontal = 23.dp),
-                color = AppTheme.colors.contentPrimary.copy(.4f),
+                color = AppTheme.colors.contentPrimary.copy(SettingsDefaults.SUBTITLE_ALPHA),
                 style = AppTheme.typography.dialogSubtitle
             )
         }
@@ -78,10 +77,9 @@ fun RenderSwitcher(
             ProfileSwitch(
                 scale = .8f,
                 checked = value,
-                enabled = enable,
                 onCheckedChange = null
             )
         } ?: run { Spacer(Modifier.width(52.dp)) }
-        Spacer(Modifier.width(20.dp))
+        Spacer(Modifier.width(SettingsDefaults.RowHorizontalPadding))
     }
 }

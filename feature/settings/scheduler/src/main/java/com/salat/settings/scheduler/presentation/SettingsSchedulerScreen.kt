@@ -25,7 +25,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -53,11 +52,13 @@ import com.salat.resources.R
 import com.salat.settings.scheduler.presentation.components.AppScheduleDialog
 import com.salat.settings.scheduler.presentation.components.RenderToolbar
 import com.salat.ui.rememberPainterResource
+import com.salat.uikit.component.BaseIconButton
 import com.salat.uikit.component.ConfirmDialog
 import com.salat.uikit.component.TopShadow
 import com.salat.uikit.theme.AppTheme
 
 private const val ICON_SIZE = 28
+private val ListItemShape = RoundedCornerShape(16.dp)
 
 @Composable
 internal fun SettingsSchedulerScreen(
@@ -87,6 +88,7 @@ internal fun SettingsSchedulerScreen(
         ConfirmDialog(
             title = stringResource(R.string.deleting_a_preset),
             message = stringResource(R.string.deleting_a_autorun_confirm),
+            okButtonTitle = stringResource(R.string.delete),
             uiScaleState = uiScaleState,
             negativeAction = true,
             onCancel = { deleteConfirmDialog = null },
@@ -123,7 +125,7 @@ internal fun SettingsSchedulerScreen(
             Modifier
                 .fillMaxWidth()
                 .weight(1f)
-                .background(AppTheme.colors.surfaceLayer1)
+                .background(AppTheme.colors.surfaceSettings)
         ) {
             TopShadow()
 
@@ -172,17 +174,16 @@ internal fun SettingsSchedulerScreen(
                         modifier = animatedModifier
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 8.dp),
-                        shape = RoundedCornerShape(12.dp),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-                        colors = CardDefaults.cardColors(containerColor = AppTheme.colors.cardItemBackground)
+                        shape = ListItemShape,
+                        colors = CardDefaults.cardColors(containerColor = AppTheme.colors.surfaceSettingsLayer1)
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .heightIn(min = 64.dp)
-                                    .clip(RoundedCornerShape(12.dp))
-                                    .background(AppTheme.colors.cardItemBackground)
+                                    .clip(ListItemShape)
+                                    .background(AppTheme.colors.surfaceSettingsLayer1)
                                     .padding(16.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
@@ -274,7 +275,7 @@ internal fun SettingsSchedulerScreen(
 
                                 Spacer(Modifier.width(10.dp))
 
-                                IconButton(
+                                BaseIconButton(
                                     modifier = Modifier
                                         .size(36.dp)
                                         .padding(start = 2.dp),

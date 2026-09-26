@@ -11,5 +11,7 @@ data class SplitPresetDto(
     val darkBackground: Boolean,
     val bottomWindowShift: Boolean = false,
     val quickAccess: Boolean = false,
-    val id: Long
+    val id: Long,
+    val windows: List<FreeWindowPresetDto> = emptyList(),
+    val ratio: Float = .5f
 )

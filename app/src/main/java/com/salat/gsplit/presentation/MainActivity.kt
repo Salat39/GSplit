@@ -8,7 +8,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.background
@@ -49,6 +48,7 @@ import com.salat.navigation.transitions.routedPopEnterTransition
 import com.salat.navigation.transitions.routedPopExitTransition
 import com.salat.resources.R
 import com.salat.stub.presentation.navigateToStub
+import com.salat.ui.enableEdgeToEdgeKeepCutoutMode
 import com.salat.ui.observeLifecycleFlow
 import com.salat.uikit.component.ConfirmDialog
 import com.salat.uikit.theme.AppTheme
@@ -117,7 +117,7 @@ class MainActivity : ComponentActivity() {
             }
             pulseAnimation()
         }
-        enableEdgeToEdge(
+        enableEdgeToEdgeKeepCutoutMode(
             SystemBarStyle.dark(Color.Transparent.toArgb()),
             SystemBarStyle.dark(Color.Transparent.toArgb())
         )

@@ -14,6 +14,7 @@ class ComposePreset : Plugin<Project> {
             implementation(findLib("androidx-ui-graphics"))
             implementation(findLib("androidx-ui-tooling-preview"))
             implementation(findLib("androidx-material3"))
+            implementation(findLib("androidx-material-icons-core"))
             // implementation(findLib("androidx-compose-animation"))
             implementation(findLib("androidx-compose-foundation"))
             androidTestImplementation(platform(findLibProvider("androidx-compose-bom")))

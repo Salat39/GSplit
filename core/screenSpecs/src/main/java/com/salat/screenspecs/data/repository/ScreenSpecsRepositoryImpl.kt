@@ -15,14 +15,7 @@ import timber.log.Timber
 class ScreenSpecsRepositoryImpl(private val context: Context) : ScreenSpecsRepository {
 
     @SuppressLint("InternalInsetResource", "DiscouragedApi")
-    override fun getStatusBarHeight(legacyMode: Boolean): Int {
-        if (legacyMode) {
-            val statusBarResourceId =
-                context.resources.getIdentifier("status_bar_height", "dimen", "android")
-            val statusBarHeight = context.resources.getDimensionPixelSize(statusBarResourceId)
-            return statusBarHeight
-        }
-
+    override fun getStatusBarHeight(): Int {
         // Calculate status bar height
         var statusBarHeight = 0
         val statusBarResId = context.resources.getIdentifier("status_bar_height", "dimen", "android")
@@ -44,15 +37,7 @@ class ScreenSpecsRepositoryImpl(private val context: Context) : ScreenSpecsRepos
     }
 
     @SuppressLint("InternalInsetResource", "DiscouragedApi")
-    override fun getNavBarHeight(legacyMode: Boolean): Int {
-        if (legacyMode) {
-            val navBarResourceId =
-                context.resources.getIdentifier("navigation_bar_height", "dimen", "android")
-            val navBarHeight =
-                if (navBarResourceId > 0) context.resources.getDimensionPixelSize(navBarResourceId) else 0
-            return navBarHeight
-        }
-
+    override fun getNavBarHeight(): Int {
         // Calculate navigation bar height
         var navBarHeight = 0
         val navBarResId = context.resources.getIdentifier("navigation_bar_height", "dimen", "android")
@@ -76,8 +61,8 @@ class ScreenSpecsRepositoryImpl(private val context: Context) : ScreenSpecsRepos
 
     @Suppress("DEPRECATION")
     @SuppressLint("InternalInsetResource", "DiscouragedApi")
-    override fun getFreeScreenHeight(legacyMode: Boolean): Int {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !legacyMode) {
+    override fun getFreeScreenHeight(): Int {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             try {
                 val windowManager = context.getSystemService(WindowManager::class.java)
                 val windowMetrics = windowManager.currentWindowMetrics
@@ -103,10 +88,10 @@ class ScreenSpecsRepositoryImpl(private val context: Context) : ScreenSpecsRepos
             // Determine device orientation: if width exceeds height, it's in landscape mode
             val isLandscape = metrics.widthPixels > metrics.heightPixels
 
-            val statusBarHeight = getStatusBarHeight(legacyMode = true)
+            val statusBarHeight = getStatusBarHeight()
             // In portrait mode, subtract the navigation bar height as well,
             // but in landscape mode, assume the navigation bar is on the side and doesn't affect height.
-            val navBarHeight = if (!isLandscape) getNavBarHeight(legacyMode = true) else 0
+            val navBarHeight = if (!isLandscape) getNavBarHeight() else 0
 
             totalHeight - statusBarHeight - navBarHeight
         }
@@ -114,8 +99,8 @@ class ScreenSpecsRepositoryImpl(private val context: Context) : ScreenSpecsRepos
 
     @Suppress("DEPRECATION")
     @SuppressLint("InternalInsetResource", "DiscouragedApi")
-    override fun getFreeScreenWidth(legacyMode: Boolean): Int {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !legacyMode) {
+    override fun getFreeScreenWidth(): Int {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             try {
                 val windowManager = context.getSystemService(WindowManager::class.java)
                 val windowMetrics = windowManager.currentWindowMetrics
@@ -152,8 +137,8 @@ class ScreenSpecsRepositoryImpl(private val context: Context) : ScreenSpecsRepos
 
     @Suppress("DEPRECATION")
     @SuppressLint("InternalInsetResource", "DiscouragedApi")
-    override fun getScreenHorizontalInsets(legacyMode: Boolean): Pair<Int, Int> {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && !legacyMode) {
+    override fun getScreenHorizontalInsets(): Pair<Int, Int> {
+        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             try {
                 val windowManager = context.getSystemService(WindowManager::class.java)
                 val windowMetrics = windowManager.currentWindowMetrics

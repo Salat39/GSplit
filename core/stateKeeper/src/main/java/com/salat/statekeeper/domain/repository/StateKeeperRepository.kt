@@ -7,9 +7,7 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
 interface StateKeeperRepository {
-    fun setInProcessClosingWindows(value: Boolean, sessionId: Long = 0L)
-
-    fun inProcessClosingWindows(): Boolean
+    fun setClosedSessionId(sessionId: Long)
 
     fun getClosedSessionId(): Long
 
@@ -42,4 +40,12 @@ interface StateKeeperRepository {
     val importSettingsEvents: SharedFlow<Unit>
 
     suspend fun sendImportSettings()
+
+    val presetPanelShown: StateFlow<Boolean>
+
+    fun setPresetPanelShown(value: Boolean)
+
+    val placedWindowsSessionId: StateFlow<Long>
+
+    fun setPlacedWindowsSessionId(sessionId: Long)
 }

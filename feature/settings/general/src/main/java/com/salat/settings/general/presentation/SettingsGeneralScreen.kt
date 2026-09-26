@@ -10,15 +10,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.platform.LocalContext
@@ -28,13 +25,17 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.salat.resources.R
+import com.salat.settings.common.presentation.GroupButtonTextStart
 import com.salat.settings.common.presentation.RenderGroupButton
 import com.salat.settings.common.presentation.RenderGroupDivider
 import com.salat.settings.common.presentation.RenderGroupTitle
 import com.salat.settings.common.presentation.RenderIconMenuDivider
+import com.salat.settings.common.presentation.RenderSettingsContent
+import com.salat.settings.common.presentation.RenderSettingsGroup
 import com.salat.settings.common.presentation.RenderToolbar
 import com.salat.ui.rememberIsLandscape
 import com.salat.uikit.component.ClickableUnderlinedText
+import com.salat.uikit.component.SettingsDefaults
 import com.salat.uikit.component.TopShadow
 import com.salat.uikit.component.toAnnotatedString
 import com.salat.uikit.preview.PreviewScreen
@@ -97,28 +98,21 @@ internal fun SettingsGeneralScreen(
         ) {
             TopShadow()
 
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
+            RenderSettingsContent {
                 // General group
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(AppTheme.colors.surfaceSettingsLayer1)
-                ) {
+                RenderSettingsGroup {
                     RenderGroupTitle(stringResource(R.string.general))
 
-                    // autostart
+                    // adb
                     RenderGroupButton(
-                        title = stringResource(R.string.autostart),
-                        subtitle = stringResource(R.string.auto_start_presets),
-                        icon = painterResource(R.drawable.ic_launch),
+                        title = stringResource(R.string.adb_features),
+                        subtitle = stringResource(R.string.adb_features_description),
+                        icon = painterResource(R.drawable.ic_android),
                         iconSize = 29,
-                        onClick = onNavigateToAutostart
+                        onClick = onNavigateToAdb
                     )
 
-                    RenderIconMenuDivider()
+                    RenderIconMenuDivider(GroupButtonTextStart)
 
                     // launching presets
                     RenderGroupButton(
@@ -129,7 +123,7 @@ internal fun SettingsGeneralScreen(
                         onClick = onNavigateToPresets
                     )
 
-                    RenderIconMenuDivider()
+                    RenderIconMenuDivider(GroupButtonTextStart)
 
                     // ui
                     RenderGroupButton(
@@ -140,15 +134,15 @@ internal fun SettingsGeneralScreen(
                         onClick = onNavigateToUi
                     )
 
-                    RenderIconMenuDivider()
+                    RenderIconMenuDivider(GroupButtonTextStart)
 
-                    // adb
+                    // autostart
                     RenderGroupButton(
-                        title = stringResource(R.string.adb_features),
-                        subtitle = stringResource(R.string.adb_features_description),
-                        icon = painterResource(R.drawable.ic_android),
+                        title = stringResource(R.string.autostart),
+                        subtitle = stringResource(R.string.auto_start_presets),
+                        icon = painterResource(R.drawable.ic_launch),
                         iconSize = 29,
-                        onClick = onNavigateToAdb
+                        onClick = onNavigateToAutostart
                     )
                 }
 
@@ -157,11 +151,7 @@ internal fun SettingsGeneralScreen(
                 Spacer(Modifier.height(12.dp))
 
                 // Modes
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(AppTheme.colors.surfaceSettingsLayer1)
-                ) {
+                RenderSettingsGroup {
                     RenderGroupTitle(stringResource(R.string.modes))
 
                     // dark background
@@ -173,8 +163,8 @@ internal fun SettingsGeneralScreen(
                     )
 
                     val isLandscape = rememberIsLandscape()
-                    if (!isLandscape) {
-                        RenderIconMenuDivider()
+                    if (!isLandscape && !state.noCaptionWindows) {
+                        RenderIconMenuDivider(GroupButtonTextStart)
 
                         // window shift
                         RenderGroupButton(
@@ -191,11 +181,7 @@ internal fun SettingsGeneralScreen(
                 Spacer(Modifier.height(12.dp))
 
                 // Overlay
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(AppTheme.colors.surfaceSettingsLayer1)
-                ) {
+                RenderSettingsGroup {
                     RenderGroupTitle(stringResource(R.string.overlay))
 
                     // Split close
@@ -207,7 +193,7 @@ internal fun SettingsGeneralScreen(
                         onClick = onNavigateToClosingOverlay
                     )
 
-                    RenderIconMenuDivider()
+                    RenderIconMenuDivider(GroupButtonTextStart)
 
                     // Window switch
                     RenderGroupButton(
@@ -224,11 +210,7 @@ internal fun SettingsGeneralScreen(
                 Spacer(Modifier.height(12.dp))
 
                 // Other
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(AppTheme.colors.surfaceSettingsLayer1)
-                ) {
+                RenderSettingsGroup {
                     RenderGroupTitle(stringResource(R.string.import_export_settings))
 
                     RenderGroupButton(
@@ -239,7 +221,7 @@ internal fun SettingsGeneralScreen(
                         onClick = { sendAction(SettingsGeneralViewModel.Action.RequestImportSettings) }
                     )
 
-                    RenderIconMenuDivider()
+                    RenderIconMenuDivider(GroupButtonTextStart)
 
                     RenderGroupButton(
                         title = stringResource(R.string.export_settings),
@@ -255,11 +237,7 @@ internal fun SettingsGeneralScreen(
                 Spacer(Modifier.height(12.dp))
 
                 // Other
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(AppTheme.colors.surfaceSettingsLayer1)
-                ) {
+                RenderSettingsGroup {
                     RenderGroupTitle(stringResource(R.string.other))
 
                     RenderGroupButton(
@@ -270,7 +248,7 @@ internal fun SettingsGeneralScreen(
                         onClick = onNavigateToAppTasks
                     )
 
-                    RenderIconMenuDivider()
+                    RenderIconMenuDivider(GroupButtonTextStart)
 
                     RenderGroupButton(
                         title = "API",
@@ -280,7 +258,7 @@ internal fun SettingsGeneralScreen(
                         onClick = onNavigateToApi
                     )
 
-                    RenderIconMenuDivider()
+                    RenderIconMenuDivider(GroupButtonTextStart)
 
                     RenderGroupButton(
                         title = buildString {
@@ -309,7 +287,7 @@ internal fun SettingsGeneralScreen(
                                 .spannedFromHtml()
                                 .toAnnotatedString(),
                             style = AppTheme.typography.aboutText,
-                            color = AppTheme.colors.contentPrimary.copy(.4f),
+                            color = AppTheme.colors.contentPrimary.copy(SettingsDefaults.SUBTITLE_ALPHA),
                             underlineColor = AppTheme.colors.contentAccent
                         ) { url ->
 

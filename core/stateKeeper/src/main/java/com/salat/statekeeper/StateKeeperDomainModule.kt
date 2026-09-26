@@ -5,7 +5,10 @@ import com.salat.statekeeper.domain.usecases.CheckAccessibilityServiceEnabledUse
 import com.salat.statekeeper.domain.usecases.CloseDarkScreenFlowUseCase
 import com.salat.statekeeper.domain.usecases.GetImportSettingsRequestUseCase
 import com.salat.statekeeper.domain.usecases.GetSkipAutoLaunchUseCase
+import com.salat.statekeeper.domain.usecases.LaunchLastFromPanelUseCase
+import com.salat.statekeeper.domain.usecases.LaunchPresetFromPanelUseCase
 import com.salat.statekeeper.domain.usecases.RequestImportSettingsUseCase
+import com.salat.statekeeper.domain.usecases.SetPresetPanelShownUseCase
 import com.salat.statekeeper.domain.usecases.SetSkipAutoLaunchUseCase
 import dagger.Module
 import dagger.Provides
@@ -36,4 +39,14 @@ object StateKeeperDomainModule {
     @Provides
     fun provideGetImportSettingsRequestUseCase(repository: StateKeeperRepository) =
         GetImportSettingsRequestUseCase(repository)
+
+    @Provides
+    fun provideSetPresetPanelShownUseCase(repository: StateKeeperRepository) = SetPresetPanelShownUseCase(repository)
+
+    @Provides
+    fun provideLaunchPresetFromPanelUseCase(repository: StateKeeperRepository) =
+        LaunchPresetFromPanelUseCase(repository)
+
+    @Provides
+    fun provideLaunchLastFromPanelUseCase(repository: StateKeeperRepository) = LaunchLastFromPanelUseCase(repository)
 }

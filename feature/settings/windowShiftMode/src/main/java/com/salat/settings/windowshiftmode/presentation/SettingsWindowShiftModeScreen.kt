@@ -3,33 +3,30 @@ package com.salat.settings.windowshiftmode.presentation
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.salat.resources.R
+import com.salat.settings.common.presentation.RenderGroupCaption
 import com.salat.settings.common.presentation.RenderGroupDivider
 import com.salat.settings.common.presentation.RenderGroupTitle
-import com.salat.settings.common.presentation.RenderSliderTitle
+import com.salat.settings.common.presentation.RenderSettingsContent
+import com.salat.settings.common.presentation.RenderSettingsGroup
+import com.salat.settings.common.presentation.RenderSliderSetting
 import com.salat.settings.common.presentation.RenderToolbar
 import com.salat.settings.common.presentation.components.AccessibilityServiceRequireDialog
-import com.salat.settings.common.presentation.toAnnotatedPaddedString
 import com.salat.settings.windowshiftmode.BuildConfig
 import com.salat.ui.rememberIsLandscape
 import com.salat.uikit.component.RenderSwitcher
@@ -82,28 +79,15 @@ internal fun SettingsWindowShiftModeScreen(
         ) {
             TopShadow()
 
-            Column(
-                modifier = Modifier.verticalScroll(rememberScrollState()),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
+            RenderSettingsContent {
                 // BottomWindowShiftSize
                 if (!isLandscape) {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(AppTheme.colors.surfaceSettingsLayer1)
-                    ) {
-                        RenderSliderTitle(
-                            stringResource(R.string.bottom_window_shift_size_title)
-                        )
-
-                        Row(
-                            modifier = Modifier
-                                .padding(horizontal = 20.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                    RenderSettingsGroup {
+                        RenderSliderSetting(
+                            title = stringResource(R.string.bottom_window_shift_size_title),
+                            value = state.bottomWindowShiftSize.toString()
                         ) {
                             ValueSlider(
-                                modifier = Modifier.weight(1f),
                                 value = state.bottomWindowShiftSize,
                                 valueRange = 0..MAX_BOTTOM_WINDOW_SHIFT_SIZE,
                                 onValueChange = { newValue ->
@@ -117,39 +101,17 @@ internal fun SettingsWindowShiftModeScreen(
                                 enabled = true,
                                 step = 1
                             )
-
-                            Text(
-                                modifier = Modifier.padding(start = 10.dp),
-                                text = state.bottomWindowShiftSize.toAnnotatedPaddedString(
-                                    3,
-                                    '0',
-                                    AppTheme.colors.contentPrimary.copy(.15f)
-                                ),
-                                style = AppTheme.typography.screenTitle,
-                                color = AppTheme.colors.contentPrimary,
-                            )
                         }
                     }
 
                     RenderGroupDivider()
 
-                    Text(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 20.dp, vertical = 6.dp),
-                        text = stringResource(R.string.bottom_window_shift_size_desc),
-                        style = AppTheme.typography.aboutText,
-                        color = AppTheme.colors.contentPrimary.copy(.4f)
-                    )
+                    RenderGroupCaption(stringResource(R.string.bottom_window_shift_size_desc))
 
                     Spacer(Modifier.height(10.dp))
                 }
 
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(AppTheme.colors.surfaceSettingsLayer1)
-                ) {
+                RenderSettingsGroup {
                     RenderGroupTitle(stringResource(R.string.automation))
 
                     RenderSwitcher(

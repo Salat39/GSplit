@@ -1,5 +1,6 @@
 package com.salat.settings.list.presentation.components
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -24,12 +26,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import com.salat.resources.R
 import com.salat.settings.list.presentation.ListViewModel
 import com.salat.settings.list.presentation.entity.DisplaySplitPreset
@@ -41,6 +45,8 @@ import com.salat.uikit.component.TopShadow
 import com.salat.uikit.theme.AppTheme
 import presentation.toast
 import presentation.vibrate
+
+private const val LIFT_SCALE = 1.02f
 
 @Composable
 internal fun RenderList(
@@ -77,6 +83,7 @@ internal fun RenderList(
         ConfirmDialog(
             title = stringResource(R.string.deleting_a_preset),
             message = stringResource(R.string.deleting_a_preset_confirm),
+            okButtonTitle = stringResource(R.string.delete),
             uiScaleState = uiScaleState,
             negativeAction = true,
             onCancel = { deleteConfirmDialog = null },
@@ -96,12 +103,23 @@ internal fun RenderList(
         itemState = menuItem,
         uiScaleState = uiScaleState,
         positionOffset = menuOffset,
+        showWindowShift = !state.noCaptionWindows,
         onDelete = { onDeleteDialog(it) },
         onEdit = { id, type -> onNavigateToAdd(id, type) },
         onSetAuthStart = { id, enable -> sendAction(ListViewModel.Action.MarkAutoStartupPreset(id, enable)) },
         onSetDarkBackground = { id, enable -> sendAction(ListViewModel.Action.MarkDarkBackgroundPreset(id, enable)) },
         onSetWindowShift = { id, enable -> sendAction(ListViewModel.Action.MarkWindowShiftPreset(id, enable)) },
         onSetQuickAccess = { id, enable -> sendAction(ListViewModel.Action.MarkQuickAccessPreset(id, enable)) },
+        onReorder = { sendAction(ListViewModel.Action.SetReorderMode(true)) }.takeIf { state.items.size > 1 }
+    )
+
+    BackHandler(enabled = state.reorderMode) { sendAction(ListViewModel.Action.SetReorderMode(false)) }
+
+    val listState = rememberLazyListState()
+    val dragState = rememberPresetDragState(
+        listState = listState,
+        onMove = { fromId, toId -> sendAction(ListViewModel.Action.MovePreset(fromId, toId)) },
+        onDrop = { sendAction(ListViewModel.Action.CommitPresetOrder) }
     )
 
     val isEmptyPresets by remember(state.dataLoaded, state.items) {
@@ -123,8 +141,10 @@ internal fun RenderList(
     Spacer(Modifier.height(toolbarHeight))
 
     RenderToolbar(
+        reorderMode = state.reorderMode,
         onAddClick = { onNavigateToAdd(null, null) },
-        onSettingsClick = onNavigateToSettings
+        onSettingsClick = onNavigateToSettings,
+        onDoneClick = { sendAction(ListViewModel.Action.SetReorderMode(false)) }
     )
     Box(
         Modifier
@@ -152,7 +172,8 @@ internal fun RenderList(
 
         LazyColumn(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxSize(),
+            state = listState
         ) {
             item(key = -2) {
                 Spacer(
@@ -161,7 +182,19 @@ internal fun RenderList(
                 )
             }
 
-            state.appUpdateInfo?.let { info ->
+            if (state.reorderMode) {
+                item(key = -5) {
+                    RenderReorderHint(
+                        modifier = Modifier.animateItem(
+                            fadeInSpec = itemFadeAnimationSpec,
+                            fadeOutSpec = itemFadeAnimationSpec,
+                            placementSpec = itemSlideAnimationSpec
+                        )
+                    )
+                }
+            }
+
+            state.appUpdateInfo?.takeUnless { state.reorderMode }?.let { info ->
                 item(key = -4) {
                     RenderAppUpdate(
                         info = info,
@@ -187,7 +220,7 @@ internal fun RenderList(
                 }
             }
 
-            if (state.showLastLaunchedSplit) {
+            if (state.showLastLaunchedSplit && !state.reorderMode) {
                 state.history?.let { history ->
                     item(key = -1) {
                         val animatedModifier = remember {
@@ -203,6 +236,7 @@ internal fun RenderList(
                             if (state.lastLaunchedSplitContrast) {
                                 RenderListType.HISTORY_CONTRAST
                             } else RenderListType.HISTORY,
+                            showWindowShift = !state.noCaptionWindows,
                             onClick = {
                                 sendAction(ListViewModel.Action.PrepareOpenSplit(history))
                             },
@@ -224,11 +258,36 @@ internal fun RenderList(
                         placementSpec = itemSlideAnimationSpec
                     )
                 }
-                RenderListItem(animatedModifier, preset, RenderListType.PRESET, onClick = {
-                    sendAction(ListViewModel.Action.PrepareOpenSplit(preset))
-                }, onLongClick = { item, offset ->
-                    onOpenMenu(item, RenderListType.PRESET, offset)
-                })
+                val isDragged = dragState.draggedId == preset.id
+                val itemModifier = when {
+                    isDragged ->
+                        Modifier
+                            .zIndex(1f)
+                            .graphicsLayer {
+                                translationY = dragState.draggedOffset
+                                scaleX = LIFT_SCALE
+                                scaleY = LIFT_SCALE
+                            }
+
+                    dragState.landingId == preset.id ->
+                        Modifier
+                            .zIndex(1f)
+                            .graphicsLayer { translationY = dragState.landingOffset }
+
+                    else -> animatedModifier
+                }
+                RenderListItem(
+                    itemModifier,
+                    preset,
+                    RenderListType.PRESET,
+                    showWindowShift = !state.noCaptionWindows,
+                    dragHandle = if (state.reorderMode) {
+                        Modifier.presetDragHandle(dragState, preset.id) { context.vibrate() }
+                    } else null,
+                    lifted = isDragged,
+                    onClick = { sendAction(ListViewModel.Action.PrepareOpenSplit(preset)) },
+                    onLongClick = { item, offset -> onOpenMenu(item, RenderListType.PRESET, offset) }
+                )
             }
             item(key = -3) {
                 Spacer(
