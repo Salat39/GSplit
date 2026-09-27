@@ -33,7 +33,8 @@ internal fun DisplayFreeWindow.toDomain() = SplitLaunchWindow(
 internal fun DisplayAppPreset.toDomain() = SplitLaunchApp(
     title = title,
     packageName = packageName,
-    autoPlay = autoPlay
+    autoPlay = autoPlay,
+    withCaption = withCaption
 )
 
 internal fun DisplayPresetType.toDomain() = when (this) {

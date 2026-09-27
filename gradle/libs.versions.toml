@@ -24,7 +24,7 @@ firebaseCrashlyticsPlugin = "3.0.7"
 
 googleServices = "4.4.4"
 googleAuth = "21.2.0"
-shizuku = "12.2.0"
+shizuku = "13.1.5"
 shizukuHidden = "3.0.0"
 adbShell = "1.3"
 

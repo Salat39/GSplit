@@ -16,6 +16,7 @@ import com.salat.preferences.domain.entity.FloatPref
 import com.salat.preferences.domain.entity.IntPref
 import com.salat.preferences.domain.usecases.FlowPrefsUseCase
 import com.salat.preferences.domain.usecases.LoadFloatPrefUseCase
+import com.salat.preferences.domain.usecases.LoadIntPrefUseCase
 import com.salat.preferences.domain.usecases.SaveBoolPrefUseCase
 import com.salat.preferences.domain.usecases.SaveIntPrefUseCase
 import com.salat.remoteconfig.domain.usecases.GetAppUpdateFlowUseCase
@@ -71,6 +72,7 @@ class ListViewModel @Inject constructor(
     private val setQuickAccessSplitPresetUseCase: SetQuickAccessSplitPresetUseCase,
     private val reorderSplitPresetsUseCase: ReorderSplitPresetsUseCase,
     private val loadFloatPrefUseCase: LoadFloatPrefUseCase,
+    private val loadIntPrefUseCase: LoadIntPrefUseCase,
     private val flowPrefsUseCase: FlowPrefsUseCase,
     private val getAppUpdateFlowUseCase: GetAppUpdateFlowUseCase,
     private val downloadFileUseCase: DownloadFileUseCase,
@@ -100,6 +102,7 @@ class ListViewModel @Inject constructor(
                     IntPref.ToolbarExtraSpace,
                     BoolPref.ShowLastLaunchedSplit,
                     BoolPref.LastLaunchedSplitContrast,
+                    BoolPref.ExperimentalNativeSplit
                 ).collect { prefs ->
                     if (prefs[0] is Float) {
                         _uiScaleState.update { prefs[0] as Float }
@@ -111,7 +114,8 @@ class ListViewModel @Inject constructor(
                     sendAction(
                         Action.UpdatePref(
                             showLastLaunchedSplit = prefs[2] as Boolean,
-                            lastLaunchedSplitContrast = prefs[3] as Boolean
+                            lastLaunchedSplitContrast = prefs[3] as Boolean,
+                            nativeSplit = prefs[4] as Boolean
                         )
                     )
                 }
@@ -189,6 +193,7 @@ class ListViewModel @Inject constructor(
     private fun CoroutineScope.checkAppUpdate() = launch {
         getAppUpdateFlowUseCase.flow.collect { (isSuccess, info) ->
             if (!isSuccess || info == null) return@collect
+            if (!info.mandatory && info.code <= loadIntPrefUseCase.execute(IntPref.SkippedUpdateCode)) return@collect
 
             val versionCode: Int = BuildConfig.VERSION_CODE
             if (info.code > versionCode || BuildConfig.DEBUG) {
@@ -264,7 +269,8 @@ class ListViewModel @Inject constructor(
 
         is Action.UpdatePref -> state.value.copy(
             showLastLaunchedSplit = viewAction.showLastLaunchedSplit,
-            lastLaunchedSplitContrast = viewAction.lastLaunchedSplitContrast
+            lastLaunchedSplitContrast = viewAction.lastLaunchedSplitContrast,
+            nativeSplit = viewAction.nativeSplit
         )
 
         is Action.InitAdbPrefs -> state.value.copy(
@@ -319,6 +325,13 @@ class ListViewModel @Inject constructor(
         is Action.SetAppUpdateInfo -> state.value.copy(
             appUpdateInfo = viewAction.update
         )
+
+        is Action.SkipAppUpdate -> {
+            viewModelScope.launch(Dispatchers.IO) {
+                saveIntPrefUseCase.execute(IntPref.SkippedUpdateCode, viewAction.code)
+            }
+            state.value.copy(appUpdateInfo = null)
+        }
     }
 
     private fun List<DisplaySplitPreset>.inOrderOf(current: List<DisplaySplitPreset>): List<DisplaySplitPreset> {
@@ -348,6 +361,7 @@ class ListViewModel @Inject constructor(
         val adbConnectionState: DisplayAdbState = DisplayAdbState.Disconnected,
         val quickSetupFinished: Boolean = false,
         val noCaptionWindows: Boolean = false,
+        val nativeSplit: Boolean = false,
         val reorderMode: Boolean = false
     ) : MviViewState
 
@@ -360,7 +374,11 @@ class ListViewModel @Inject constructor(
         internal class MarkDarkBackgroundPreset(val id: Long, val value: Boolean) : Action()
         internal class MarkWindowShiftPreset(val id: Long, val value: Boolean) : Action()
         internal class MarkQuickAccessPreset(val id: Long, val value: Boolean) : Action()
-        internal class UpdatePref(val showLastLaunchedSplit: Boolean, val lastLaunchedSplitContrast: Boolean) : Action()
+        internal class UpdatePref(
+            val showLastLaunchedSplit: Boolean,
+            val lastLaunchedSplitContrast: Boolean,
+            val nativeSplit: Boolean
+        ) : Action()
         internal class InitAdbPrefs(val enableAdbHelper: Boolean, val adbHelperPort: Int) : Action()
         internal class SetAdbConnectionState(val state: DisplayAdbState) : Action()
         internal class SetNoCaptionWindows(val value: Boolean) : Action()
@@ -371,6 +389,7 @@ class ListViewModel @Inject constructor(
         internal class StartDownloadUpdate(val url: String) : Action()
         internal class SetDownloadUpdateState(val value: UiDownloadState?) : Action()
         internal class SetAppUpdateInfo(val update: DisplayAppUpdate?) : Action()
+        internal class SkipAppUpdate(val code: Int) : Action()
         internal class SetReorderMode(val value: Boolean) : Action()
         internal class MovePreset(val fromId: Long, val toId: Long) : Action()
         internal data object CommitPresetOrder : Action()

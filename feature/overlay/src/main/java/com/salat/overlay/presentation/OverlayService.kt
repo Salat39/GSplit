@@ -329,46 +329,42 @@ class OverlayService : Service() {
 
                     fun onReplace() {
                         scope.launch {
-                            // Free split - replace only the whole preset, not a single window
-                            val items = if (isFreeSplit) {
-                                emptyList()
-                            } else {
-                                replacementApps.getReplacementApps().toDisplay()
-                            }
+                            val items = replacementApps.getReplacementApps().toDisplay()
+                            val freeWindowCount = launchedWindows?.freePresetWindowPackages?.size ?: 0
+                            val hasSecondWindow = !isFreeSplit || freeWindowCount > 1
 
                             // show menu overlay
                             showMenuOverlay(
-                                items,
+                                if (hasSecondWindow) items else items.map { it.copy(secondWindow = false) },
                                 quickAccessPresets.toDisplayPreset(),
                                 replaceOverlayAppNames,
-                                replaceOverlayPresetNames
+                                replaceOverlayPresetNames,
+                                isFreeSplit
                             )
                         }
                     }
-                    if (!isFreeSplit || quickAccessPresets.isNotEmpty()) {
-                        AppTheme {
-                            CompositionLocalProvider(
-                                LocalDensity provides scaledDensity,
-                                LocalLayoutDirection provides LayoutDirection.Ltr
+                    AppTheme {
+                        CompositionLocalProvider(
+                            LocalDensity provides scaledDensity,
+                            LocalLayoutDirection provides LayoutDirection.Ltr
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .clip(CircleShape)
+                                    .clickableNoRipple(onClick = ::onReplace)
+                                    .background(Color.Black.copy(replaceOverlayBgAlpha))
+                                    .padding(20.dp),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Box(
+                                Icon(
                                     modifier = Modifier
-                                        .clip(CircleShape)
-                                        .clickableNoRipple(onClick = ::onReplace)
-                                        .background(Color.Black.copy(replaceOverlayBgAlpha))
-                                        .padding(20.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        modifier = Modifier
-                                            .alpha(replaceOverlayIconAlpha)
-                                            .scale(scaleX = -1f, scaleY = 1f)
-                                            .size(30.dp),
-                                        painter = rememberPainterResource(R.drawable.ic_switch7),
-                                        tint = Color.White,
-                                        contentDescription = null
-                                    )
-                                }
+                                        .alpha(replaceOverlayIconAlpha)
+                                        .scale(scaleX = -1f, scaleY = 1f)
+                                        .size(30.dp),
+                                    painter = rememberPainterResource(R.drawable.ic_switch7),
+                                    tint = Color.White,
+                                    contentDescription = null
+                                )
                             }
                         }
                     }
@@ -445,7 +441,8 @@ class OverlayService : Service() {
         items: List<DisplayReplacementAppItem>,
         presets: List<DisplaySplitPreset>,
         appNames: Boolean,
-        presetsNames: Boolean
+        presetsNames: Boolean,
+        isFreeSplit: Boolean
     ) {
         if (interactiveMenuContainer != null) return
 
@@ -475,8 +472,14 @@ class OverlayService : Service() {
 
                 val scope = rememberCoroutineScope()
                 val isLandscape = rememberIsLandscape()
-                val firstTitle = stringResource(if (isLandscape) R.string.left_window else R.string.top_window)
-                val secondTitle = stringResource(if (isLandscape) R.string.right_window else R.string.bottom_window)
+                val firstTitle = when {
+                    isFreeSplit -> stringResource(R.string.window_number, 1)
+                    else -> stringResource(if (isLandscape) R.string.left_window else R.string.top_window)
+                }
+                val secondTitle = when {
+                    isFreeSplit -> stringResource(R.string.window_number, 2)
+                    else -> stringResource(if (isLandscape) R.string.right_window else R.string.bottom_window)
+                }
 
                 AppTheme(darkTheme = true) {
                     CompositionLocalProvider(

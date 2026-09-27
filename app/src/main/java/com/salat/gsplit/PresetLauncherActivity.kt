@@ -116,7 +116,8 @@ class PresetLauncherActivity : ComponentActivity() {
                 packageName = freePackage,
                 bounds = freeBounds,
                 autoPlay = intent.getBooleanExtra("free_auto_play", false),
-                pin = intent.getBooleanExtra("free_pin", false)
+                pin = intent.getBooleanExtra("free_pin", false),
+                withCaption = intent.getBooleanExtra("free_caption", false)
             )
         } else if (firstPackage.isNotEmpty() && secondPackage.isNotEmpty()) {
             val firstAutoPlay = intent.getIntExtra("first_auto_play", 0)
@@ -124,6 +125,8 @@ class PresetLauncherActivity : ComponentActivity() {
             val type = intent.getStringExtra("type") ?: ""
             val darkBackground = intent.getIntExtra("dark_background", 0)
             val windowShift = intent.getIntExtra("window_shift", 0)
+            val firstCaption = intent.getIntExtra("first_caption", 0)
+            val secondCaption = intent.getIntExtra("second_caption", 0)
 
             viewModel.launchCustomSplit(
                 firstPackage = firstPackage,
@@ -132,7 +135,9 @@ class PresetLauncherActivity : ComponentActivity() {
                 secondAutoPlay = secondAutoPlay,
                 type = type,
                 darkBackground = darkBackground,
-                windowShift = windowShift
+                windowShift = windowShift,
+                firstCaption = firstCaption,
+                secondCaption = secondCaption
             )
         } else if (id != -1L) {
             viewModel.findAndLaunchPresetById(id)

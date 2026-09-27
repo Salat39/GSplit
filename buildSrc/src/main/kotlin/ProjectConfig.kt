@@ -10,7 +10,7 @@ object ProjectConfig {
     const val COMPILE_SDK = 36
 
     const val VERSION_MAJOR = 3
-    const val VERSION_MINOR = 0
+    const val VERSION_MINOR = 1
     const val VERSION_PATCH = 0
     const val VERSION_FIX = 0
 

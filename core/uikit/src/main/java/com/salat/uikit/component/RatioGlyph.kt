@@ -7,15 +7,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import com.salat.uikit.theme.AppTheme
 
 @Composable
-fun RatioGlyph(firstShare: Float, isLandscape: Boolean, modifier: Modifier = Modifier, length: Dp = 24.dp) {
+fun RatioGlyph(
+    firstShare: Float,
+    isLandscape: Boolean,
+    modifier: Modifier = Modifier,
+    length: Dp = 24.dp,
+    firstActive: Boolean = true,
+    secondActive: Boolean = true
+) {
     val firstColor = AppTheme.colors.addWindowFirstAccent
     val secondColor = AppTheme.colors.addWindowSecondAccent
+    val inactiveColor = AppTheme.colors.contentPrimary.copy(.3f)
     val thickness = length * 2 / 3
     Canvas(modifier.size(if (isLandscape) DpSize(length, thickness) else DpSize(thickness, length))) {
         val gap = (length / 12).toPx()
@@ -23,22 +34,35 @@ fun RatioGlyph(firstShare: Float, isLandscape: Boolean, modifier: Modifier = Mod
         val axisLength = if (isLandscape) size.width else size.height
         val firstLength = axisLength * firstShare - gap / 2
         val secondStart = firstLength + gap
-        if (isLandscape) {
-            drawRoundRect(firstColor, size = Size(firstLength, size.height), cornerRadius = corner)
-            drawRoundRect(
-                secondColor,
-                topLeft = Offset(secondStart, 0f),
-                size = Size(axisLength - secondStart, size.height),
-                cornerRadius = corner
-            )
+        val stroke = Stroke((length / 18).toPx())
+        fun drawPart(color: Color, active: Boolean, topLeft: Offset, partSize: Size) = if (active) {
+            drawRoundRect(color, topLeft = topLeft, size = partSize, cornerRadius = corner)
         } else {
-            drawRoundRect(firstColor, size = Size(size.width, firstLength), cornerRadius = corner)
-            drawRoundRect(
-                secondColor,
-                topLeft = Offset(0f, secondStart),
-                size = Size(size.width, axisLength - secondStart),
-                cornerRadius = corner
-            )
+            drawInnerOutline(inactiveColor, topLeft, partSize, corner, stroke)
+        }
+        if (isLandscape) {
+            drawPart(firstColor, firstActive, Offset.Zero, Size(firstLength, size.height))
+            drawPart(secondColor, secondActive, Offset(secondStart, 0f), Size(axisLength - secondStart, size.height))
+        } else {
+            drawPart(firstColor, firstActive, Offset.Zero, Size(size.width, firstLength))
+            drawPart(secondColor, secondActive, Offset(0f, secondStart), Size(size.width, axisLength - secondStart))
         }
     }
+}
+
+private fun DrawScope.drawInnerOutline(
+    color: Color,
+    topLeft: Offset,
+    partSize: Size,
+    corner: CornerRadius,
+    stroke: Stroke
+) {
+    val inset = stroke.width / 2
+    drawRoundRect(
+        color,
+        topLeft = topLeft + Offset(inset, inset),
+        size = Size(partSize.width - stroke.width, partSize.height - stroke.width),
+        cornerRadius = CornerRadius(corner.x - inset, corner.y - inset),
+        style = stroke
+    )
 }

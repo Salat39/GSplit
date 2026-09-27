@@ -66,8 +66,16 @@
 
     <string name="exp_native_split_title">Experimental native split implementation</string>
     <string name="exp_native_split_desc">Split launch via Accessibility API. Compatible with Android 9 and above. Some required services may be unavailable on automotive firmware.</string>
-    <string name="no_caption_windows_title">Windows without the top bar</string>
-    <string name="no_caption_windows_desc">Removes the top bar with buttons from windows. Needs a connected ADB helper. Downside: a window may briefly flash on launch. Experimental feature.</string>
+    <string name="no_caption_windows_title">Allow windows without the top bar</string>
+    <string name="no_caption_windows_desc">Lets windows open without the top bar with buttons. Choose the type for each window in the preset editor. By default, windows open without the bar. When off, all windows open with the bar. Needs a connected ADB helper. Downside: a window may briefly flash on launch. Experimental feature.</string>
+    <string name="no_caption_windows_adb_hint">To turn it on, connect ADB in “%1$s”</string>
+    <string name="no_caption_windows_sdk_hint">Available on Android 11 and newer</string>
+    <string name="window_type_caption">With top bar</string>
+    <string name="window_type_no_caption">No top bar</string>
+    <string name="window_type_caption_toast">%1$s: with top bar</string>
+    <string name="window_type_no_caption_toast">%1$s: no top bar</string>
+    <string name="window_type_pinned_hint">A window on top of others always opens with the top bar</string>
+    <string name="window_type_adb_hint">To choose the window type, connect ADB in “%1$s”</string>
 
     <string name="autoplay">Auto-start playback</string>
     <string name="autoplay_s">Autoplay</string>
@@ -208,6 +216,13 @@
     <string name="bottom_window">Bottom window</string>
     <string name="left_window">Left window</string>
     <string name="right_window">Right window</string>
+    <string name="window_number">Window %d</string>
+    <string name="top_window_short">Top</string>
+    <string name="bottom_window_short">Bottom</string>
+    <string name="left_window_short">Left</string>
+    <string name="right_window_short">Right</string>
+    <string name="both_windows">Both</string>
+    <string name="show_in_menu">Where to show in the menu</string>
     <string name="add_app">Add app</string>
     <string name="adding_app">Adding an app</string>
     <string name="overlay_size">Overlay size</string>
@@ -252,7 +267,7 @@
     <string name="contrast_border">Contrast border</string>
     <string name="contrast_border_desc">A more prominent border around the last launched split item</string>
 
-    <string name="adb_features">ADB &amp; Telnet</string>
+    <string name="adb_features">ADB, Telnet &amp; Shizuku</string>
     <string name="adb_features_description">Some features work fully only through ADB. Connect it to use everything the app can do</string>
     <string name="adb_helper">ADB Helper</string>
     <string name="adb_helper_description">Unlocks features related to executing ADB commands</string>
@@ -271,6 +286,7 @@
     <string name="new_version_available">New version available</string>
     <string name="details">Details</string>
     <string name="download">Download</string>
+    <string name="skip">Skip</string>
     <string name="data_fetch_failed">Failed to retrieve data. Please check your internet connection.</string>
     <string name="off">Off</string>
     <string name="enter_your_port">Enter your port number</string>
@@ -356,16 +372,16 @@ Launches the autostart split configuration.
 <br>
 <strong>Action 6</strong>: \"com.salat.gsplit.CUSTOM_LAUNCH\"
 <br>
-Parameters: first_package, second_package, first_auto_play:[0|1], second_auto_play:[0|1], type:[1x1|2x1|…], dark_background:[0|1], window_shift:[0|1]
+Parameters: first_package, second_package, first_auto_play:[0|1], second_auto_play:[0|1], type:[1x1|2x1|…], dark_background:[0|1], window_shift:[0|1], first_caption:[0|1], second_caption:[0|1]
 <br>
-Launches a split with the specified configuration.
+Launches a split with the specified configuration. first_caption and second_caption set the window type: 1 — with the top bar, 0 — without the top bar (default). Windows open without the top bar only when the “Allow windows without the top bar” setting is on and ADB is connected.
 <br>
 <br>
 <strong>Action 7</strong>: \"com.salat.gsplit.FREE_LAUNCH\"
 <br>
-Parameters: package, x:[0..100], y:[0..100], width:[1..100], height:[1..100], auto_play:[0|1], pin:[0|1]
+Parameters: package, x:[0..100], y:[0..100], width:[1..100], height:[1..100], auto_play:[0|1], pin:[0|1], caption:[0|1]
 <br>
-Launches the application in a free window. Position and size are percentages of the screen area between the status bar and the navigation bar. A pinned window stays on top of other windows. Closes the current split if it is open.
+Launches the application in a free window. Position and size are percentages of the screen area between the status bar and the navigation bar. A pinned window stays on top of other windows and always opens with the top bar. caption sets the window type: 1 — with the top bar, 0 — without the top bar (default). The window opens without the top bar only when the “Allow windows without the top bar” setting is on and ADB is connected. Closes the current split if it is open.
 <br>
 <br>
 <strong>Action 8</strong>: \"com.salat.gsplit.TOGGLE_PRESET_PANEL\"

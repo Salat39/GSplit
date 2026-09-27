@@ -46,7 +46,7 @@ sealed class BoolPref(override val key: String, override val default: Boolean) :
     data object MurglarCompatPlay : BoolPref(BoolPrefKey.MURGLAR_COMPAT_PLAY, BuildConfig.COMPAT_PLAY)
     data object VkxCompatPlay : BoolPref(BoolPrefKey.VKX_COMPAT_PLAY, BuildConfig.COMPAT_PLAY)
 
-    data object DarkScreenAutoClose : BoolPref(BoolPrefKey.DARK_SCREEN_AUTO_CLOSE, false)
+    data object DarkScreenAutoClose : BoolPref(BoolPrefKey.DARK_SCREEN_AUTO_CLOSE, true)
     data object AutoRefocusWhenBottomWindowShift : BoolPref(BoolPrefKey.AUTO_REFOCUS_WHEN_BOTTOM_WINDOW_SHIFT, false)
 
     // Shift before close

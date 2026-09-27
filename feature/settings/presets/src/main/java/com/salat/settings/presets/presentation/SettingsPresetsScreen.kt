@@ -1,5 +1,6 @@
 package com.salat.settings.presets.presentation
 
+import android.os.Build
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
@@ -9,12 +10,19 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +48,7 @@ import com.salat.settings.common.presentation.toShiftString
 import com.salat.settings.presets.presentation.components.ADVANCED_SETTINGS_ANIMATION_MS
 import com.salat.settings.presets.presentation.components.AdvancedSettingsRow
 import com.salat.uikit.component.RenderSwitcher
+import com.salat.uikit.component.SettingsDefaults
 import com.salat.uikit.component.TopShadow
 import com.salat.uikit.component.ValueSlider
 import com.salat.uikit.preview.PreviewScreen
@@ -53,6 +62,8 @@ internal fun SettingsPresetsScreen(
 ) = Scaffold { innerPadding ->
     val context = LocalContext.current
     var advancedExpanded by rememberSaveable { mutableStateOf(false) }
+    val isNoCaptionSdkSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+    val isNoCaptionWindowsAvailable = isNoCaptionSdkSupported && state.adbConnected
 
     Column(
         modifier = Modifier
@@ -77,10 +88,42 @@ internal fun SettingsPresetsScreen(
                     RenderSwitcher(
                         title = stringResource(R.string.no_caption_windows_title),
                         subtitle = stringResource(R.string.no_caption_windows_desc),
-                        value = state.noCaptionWindows,
+                        value = state.noCaptionWindows?.let { it && isNoCaptionWindowsAvailable },
+                        enable = isNoCaptionWindowsAvailable,
                         groupDivider = false,
                         onChange = { sendAction(SettingsPresetsViewModel.Action.SetNoCaptionWindows(it)) }
                     )
+
+                    if (!isNoCaptionWindowsAvailable) {
+                        Row(
+                            modifier = Modifier.padding(
+                                start = SettingsDefaults.RowHorizontalPadding,
+                                end = SettingsDefaults.RowHorizontalPadding,
+                                bottom = 12.dp
+                            ),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Lock,
+                                contentDescription = null,
+                                tint = AppTheme.colors.contentAccent,
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = if (isNoCaptionSdkSupported) {
+                                    stringResource(
+                                        R.string.no_caption_windows_adb_hint,
+                                        stringResource(R.string.adb_features)
+                                    )
+                                } else {
+                                    stringResource(R.string.no_caption_windows_sdk_hint)
+                                },
+                                style = AppTheme.typography.dialogSubtitle,
+                                color = AppTheme.colors.contentAccent
+                            )
+                        }
+                    }
 
                     RenderIconMenuDivider()
 

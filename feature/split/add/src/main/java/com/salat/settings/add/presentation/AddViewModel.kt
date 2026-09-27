@@ -1,9 +1,11 @@
 package com.salat.settings.add.presentation
 
+import android.os.Build
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import androidx.navigation.toRoute
+import com.salat.preferences.domain.entity.BoolPref
 import com.salat.preferences.domain.entity.FloatPref
 import com.salat.preferences.domain.usecases.FlowPrefsUseCase
 import com.salat.preferences.domain.usecases.LoadFloatPrefUseCase
@@ -13,6 +15,7 @@ import com.salat.settings.add.presentation.entity.SizeFormat
 import com.salat.settings.add.presentation.mappers.toDisplay
 import com.salat.settings.add.presentation.mappers.toDomainPreset
 import com.salat.settings.add.presentation.route.SplitAddNavRoute
+import com.salat.splitlauncher.domain.usecases.GetNoCaptionWindowsFlowUseCase
 import com.salat.splitpresets.domain.entity.PresetType
 import com.salat.splitpresets.domain.usecases.AddSplitPresetUseCase
 import com.salat.splitpresets.domain.usecases.GetPresetByIdUseCase
@@ -46,7 +49,8 @@ class AddViewModel @Inject constructor(
     private val updateSplitPresetUseCase: UpdateSplitPresetUseCase,
     private val getPresetFreeIdUseCase: GetPresetFreeIdUseCase,
     private val loadFloatPrefUseCase: LoadFloatPrefUseCase,
-    private val flowPrefsUseCase: FlowPrefsUseCase
+    private val flowPrefsUseCase: FlowPrefsUseCase,
+    private val getNoCaptionWindowsFlowUseCase: GetNoCaptionWindowsFlowUseCase
 ) : BaseSyncViewModel<AddViewModel.ViewState, AddViewModel.Action>(
     savedStateHandle.toRoute<SplitAddNavRoute>().let { data ->
         data.type?.let { type ->
@@ -86,6 +90,24 @@ class AddViewModel @Inject constructor(
             launch {
                 val installedApps = findAllInstalledAppsUseCase.execute().toDisplay()
                 sendAction(Action.SetDeviceApps(installedApps))
+            }
+
+            launch {
+                getNoCaptionWindowsFlowUseCase.flow.collect {
+                    sendAction(Action.SetWindowTypeAvailable(it))
+                }
+            }
+
+            launch {
+                flowPrefsUseCase.execute(BoolPref.ExperimentalNativeSplit, BoolPref.NoCaptionWindows).collect { prefs ->
+                    sendAction(
+                        Action.SetWindowTypePrefs(
+                            isNativeSplitEnabled = prefs[0] as Boolean,
+                            isWindowTypeEnabled = prefs[1] as Boolean &&
+                                Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                        )
+                    )
+                }
             }
         }
     }
@@ -129,8 +151,29 @@ class AddViewModel @Inject constructor(
         Action.ShowPresets -> state.value.copy(splitForm = state.value.customRatio.nearestPresetFormat())
 
         is Action.SetDeviceApps -> state.value.copy(deviceApps = viewAction.apps)
-        is Action.SetBottomApp -> state.value.copy(bottomApp = viewAction.app)
-        is Action.SetTopApp -> state.value.copy(topApp = viewAction.app)
+        is Action.SetBottomApp -> state.value.copy(
+            bottomApp = viewAction.app?.copy(withCaption = state.value.bottomApp?.withCaption ?: false)
+        )
+
+        is Action.SetTopApp -> state.value.copy(
+            topApp = viewAction.app?.copy(withCaption = state.value.topApp?.withCaption ?: false)
+        )
+
+        is Action.SetTopWithCaption -> state.value.copy(
+            topApp = state.value.topApp?.copy(withCaption = viewAction.value)
+        )
+
+        is Action.SetBottomWithCaption -> state.value.copy(
+            bottomApp = state.value.bottomApp?.copy(withCaption = viewAction.value)
+        )
+
+        is Action.SetWindowTypeAvailable -> state.value.copy(isWindowTypeAvailable = viewAction.value)
+
+        is Action.SetWindowTypePrefs -> state.value.copy(
+            isNativeSplitEnabled = viewAction.isNativeSplitEnabled,
+            isWindowTypeEnabled = viewAction.isWindowTypeEnabled
+        )
+
         Action.SwapApps -> state.value.copy(topApp = state.value.bottomApp, bottomApp = state.value.topApp)
 
         is Action.SetEditData -> state.value.copy(
@@ -238,7 +281,10 @@ class AddViewModel @Inject constructor(
         val isFreePresetEdit: Boolean = false,
         val freeWindows: List<DisplayFreeWindow> = emptyList(),
         val closeScreenSingleEvent: Boolean? = null,
-        val customRatio: Float = .5f
+        val customRatio: Float = .5f,
+        val isWindowTypeEnabled: Boolean = false,
+        val isWindowTypeAvailable: Boolean = false,
+        val isNativeSplitEnabled: Boolean = false
     ) : MviViewState {
         val windowRatio: Float get() = splitForm.presetRatio ?: customRatio
     }
@@ -248,6 +294,13 @@ class AddViewModel @Inject constructor(
         internal class SetDeviceApps(val apps: List<DeviceAppInfo>) : Action()
         internal class SetTopApp(val app: DeviceAppInfo?) : Action()
         internal class SetBottomApp(val app: DeviceAppInfo?) : Action()
+        internal class SetTopWithCaption(val value: Boolean) : Action()
+        internal class SetBottomWithCaption(val value: Boolean) : Action()
+        internal class SetWindowTypeAvailable(val value: Boolean) : Action()
+        internal class SetWindowTypePrefs(
+            val isNativeSplitEnabled: Boolean,
+            val isWindowTypeEnabled: Boolean
+        ) : Action()
         internal class SetCloseScreenSingleEvent(val value: Boolean?) : Action()
 
         internal class SetEditData(

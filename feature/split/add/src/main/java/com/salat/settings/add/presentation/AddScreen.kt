@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -73,6 +72,8 @@ import com.salat.settings.add.presentation.components.DrawableImage
 import com.salat.settings.add.presentation.components.FreeModeEditor
 import com.salat.settings.add.presentation.components.ManualRatioHandle
 import com.salat.settings.add.presentation.components.RenderToolbar
+import com.salat.settings.add.presentation.components.WindowTypeSwitch
+import com.salat.settings.add.presentation.components.WindowTypeSwitchVariant
 import com.salat.settings.add.presentation.entity.DeviceAppInfo
 import com.salat.settings.add.presentation.entity.SizeFormat
 import com.salat.settings.add.presentation.entity.presetFormatOf
@@ -163,6 +164,8 @@ internal fun AddScreen(
         FreeModeEditor(
             windows = state.freeWindows,
             deviceApps = state.deviceApps,
+            showWindowType = state.isWindowTypeEnabled,
+            isWindowTypeLocked = !state.isWindowTypeAvailable,
             uiScaleState = uiScaleState,
             sendAction = sendAction,
             onBack = onFreeModeBack,
@@ -221,8 +224,12 @@ internal fun AddScreen(
                     app = state.topApp,
                     isFirst = true,
                     isLandscape = isLandscape,
+                    showWindowType = state.isWindowTypeEnabled && !state.isNativeSplitEnabled && state.topApp != null,
+                    isWindowTypeLocked = !state.isWindowTypeAvailable,
+                    withCaption = state.topApp?.withCaption ?: false,
                     onClick = { showFirstSelectDialog.value = true },
-                    onToggleAutoPlay = { sendAction(AddViewModel.Action.ToggleTopAutoPlay) }
+                    onToggleAutoPlay = { sendAction(AddViewModel.Action.ToggleTopAutoPlay) },
+                    onWindowTypeChange = { sendAction(AddViewModel.Action.SetTopWithCaption(it)) }
                 )
             }
             val secondPane: @Composable (Modifier) -> Unit = { paneModifier ->
@@ -233,8 +240,13 @@ internal fun AddScreen(
                     app = state.bottomApp,
                     isFirst = false,
                     isLandscape = isLandscape,
+                    showWindowType = state.isWindowTypeEnabled &&
+                        !state.isNativeSplitEnabled && state.bottomApp != null,
+                    isWindowTypeLocked = !state.isWindowTypeAvailable,
+                    withCaption = state.bottomApp?.withCaption ?: false,
                     onClick = { showSecondSelectDialog.value = true },
-                    onToggleAutoPlay = { sendAction(AddViewModel.Action.ToggleBottomAutoPlay) }
+                    onToggleAutoPlay = { sendAction(AddViewModel.Action.ToggleBottomAutoPlay) },
+                    onWindowTypeChange = { sendAction(AddViewModel.Action.SetBottomWithCaption(it)) }
                 )
             }
             val band: @Composable () -> Unit = {
@@ -310,17 +322,23 @@ private fun AppPane(
     app: DeviceAppInfo?,
     isFirst: Boolean,
     isLandscape: Boolean,
+    showWindowType: Boolean,
+    isWindowTypeLocked: Boolean,
+    withCaption: Boolean,
     onClick: () -> Unit,
-    onToggleAutoPlay: () -> Unit
+    onToggleAutoPlay: () -> Unit,
+    onWindowTypeChange: (Boolean) -> Unit
 ) {
     val accent = windowAccent(isFirst)
     // The label stays in the outer corner because the options card covers the seam side
     val isLabelAtBottom = !isLandscape && !isFirst
-    val labelAlignment = when {
-        isLabelAtBottom -> Alignment.BottomStart
-        isLandscape && !isFirst -> Alignment.TopEnd
-        else -> Alignment.TopStart
-    }
+    val labelAtEnd = isLandscape && !isFirst
+    val isSwitchInLabelRow = showWindowType && !isLandscape
+    val isSwitchInBottomCorner = showWindowType && isLandscape
+    val context = LocalContext.current
+    val captionToast = app?.let { stringResource(R.string.window_type_caption_toast, it.appName) }.orEmpty()
+    val noCaptionToast = app?.let { stringResource(R.string.window_type_no_caption_toast, it.appName) }.orEmpty()
+    val adbHint = stringResource(R.string.window_type_adb_hint, stringResource(R.string.adb_features))
 
     BoxWithConstraints(
         modifier = modifier
@@ -331,6 +349,31 @@ private fun AppPane(
         val isNarrow = maxWidth < NarrowPaneWidth
         val badgeTextStyle = AppTheme.typography.radioTitle.let { if (isNarrow) it.scaledWithLayout() else it }
         val sidePadding = if (isNarrow) NarrowPaneContentPadding else PaneContentPadding
+        val switchWithLabel: @Composable () -> Unit = {
+            WindowTypeSwitch(
+                withCaption = withCaption,
+                color = accent,
+                variant = WindowTypeSwitchVariant.PANE,
+                showLabel = true,
+                textStyle = badgeTextStyle,
+                enabled = !isWindowTypeLocked,
+                onChange = onWindowTypeChange,
+                onLockedClick = { context.toast(adbHint) }
+            )
+        }
+        val switchWithoutLabel: @Composable () -> Unit = {
+            WindowTypeSwitch(
+                withCaption = withCaption,
+                color = accent,
+                variant = WindowTypeSwitchVariant.PANE,
+                enabled = !isWindowTypeLocked,
+                onChange = { value ->
+                    context.toast(if (value) captionToast else noCaptionToast)
+                    onWindowTypeChange(value)
+                },
+                onLockedClick = { context.toast(adbHint) }
+            )
+        }
 
         Box(
             modifier = Modifier
@@ -339,7 +382,7 @@ private fun AppPane(
                     start = sidePadding,
                     end = sidePadding,
                     top = if (isLabelAtBottom) PaneContentPadding else PaneBadgeInset,
-                    bottom = if (isLabelAtBottom) PaneBadgeInset else PaneContentPadding
+                    bottom = if (isLabelAtBottom || isSwitchInBottomCorner) PaneBadgeInset else PaneContentPadding
                 ),
             contentAlignment = Alignment.Center
         ) {
@@ -360,16 +403,69 @@ private fun AppPane(
             }
         }
 
-        PaneLabel(
-            number = number,
-            label = label,
-            accent = accent,
-            textStyle = badgeTextStyle,
+        AdaptivePaneRow(
+            isSwitchAtStart = labelAtEnd,
             modifier = Modifier
-                .align(labelAlignment)
-                .padding(PaneLabelMargin)
-                .widthIn(max = (maxWidth - PaneLabelMargin * 2).coerceAtLeast(0.dp))
+                .align(if (isLabelAtBottom) Alignment.BottomCenter else Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(PaneLabelMargin),
+            label = {
+                PaneLabel(number = number, label = label, accent = accent, textStyle = badgeTextStyle)
+            },
+            switchWithLabel = { if (isSwitchInLabelRow) switchWithLabel() },
+            switchWithoutLabel = { if (isSwitchInLabelRow) switchWithoutLabel() }
         )
+
+        if (isSwitchInBottomCorner) {
+            AdaptivePaneRow(
+                isSwitchAtStart = isFirst,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(PaneLabelMargin),
+                switchWithLabel = switchWithLabel,
+                switchWithoutLabel = switchWithoutLabel
+            )
+        }
+    }
+}
+
+// Shows the switch with the text when it fits next to the label. Otherwise it shows the switch without the text
+@Composable
+private fun AdaptivePaneRow(
+    isSwitchAtStart: Boolean,
+    modifier: Modifier,
+    switchWithLabel: @Composable () -> Unit,
+    switchWithoutLabel: @Composable () -> Unit,
+    label: @Composable () -> Unit = {}
+) = Layout(
+    modifier = modifier,
+    contents = listOf(label, switchWithLabel, switchWithoutLabel)
+) { (labelMeasurables, labeledSwitchMeasurables, compactSwitchMeasurables), constraints ->
+    val itemConstraints = constraints.copy(minWidth = 0, minHeight = 0)
+    val labelMeasurable = labelMeasurables.firstOrNull()
+    val labeledSwitch = labeledSwitchMeasurables.firstOrNull()?.measure(itemConstraints)
+    val compactSwitch = compactSwitchMeasurables.firstOrNull()?.measure(itemConstraints)
+    val gap = if (labelMeasurable != null && compactSwitch != null) 8.dp.roundToPx() else 0
+    val labelIntrinsicWidth = labelMeasurable?.maxIntrinsicWidth(Constraints.Infinity) ?: 0
+    val windowTypeSwitch = labeledSwitch
+        ?.takeIf { labelIntrinsicWidth + gap + it.width <= constraints.maxWidth }
+        ?: compactSwitch
+    val labelMaxWidth = (constraints.maxWidth - (windowTypeSwitch?.width ?: 0) - gap).coerceAtLeast(0)
+    val labelPlaceable = labelMeasurable?.measure(
+        itemConstraints.copy(maxWidth = labelMaxWidth, minHeight = windowTypeSwitch?.height ?: 0)
+    )
+    val height = maxOf(labelPlaceable?.height ?: 0, windowTypeSwitch?.height ?: 0)
+
+    layout(constraints.maxWidth, height) {
+        labelPlaceable?.let {
+            val labelX = if (isSwitchAtStart) constraints.maxWidth - it.width else 0
+            it.place(labelX, (height - it.height) / 2)
+        }
+        windowTypeSwitch?.let {
+            val switchX = if (isSwitchAtStart) 0 else constraints.maxWidth - it.width
+            it.place(switchX, (height - it.height) / 2)
+        }
     }
 }
 
@@ -396,35 +492,36 @@ private fun AdaptivePaneContent(regular: @Composable () -> Unit, compact: @Compo
 }
 
 @Composable
-private fun PaneLabel(number: Int, label: String, accent: Color, textStyle: TextStyle, modifier: Modifier) = Row(
-    modifier = modifier
-        .clip(CircleShape)
-        .background(Color.Black.copy(PANE_BADGE_ALPHA))
-        .padding(start = 5.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
-    verticalAlignment = Alignment.CenterVertically,
-    horizontalArrangement = Arrangement.spacedBy(8.dp)
-) {
-    Box(
-        modifier = Modifier
-            .size(22.dp)
+private fun PaneLabel(number: Int, label: String, accent: Color, textStyle: TextStyle, modifier: Modifier = Modifier) =
+    Row(
+        modifier = modifier
             .clip(CircleShape)
-            .background(accent),
-        contentAlignment = Alignment.Center
+            .background(Color.Black.copy(PANE_BADGE_ALPHA))
+            .padding(start = 5.dp, end = 12.dp, top = 5.dp, bottom = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        Box(
+            modifier = Modifier
+                .size(22.dp)
+                .clip(CircleShape)
+                .background(accent),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = number.toString(),
+                style = AppTheme.typography.toggleChip,
+                color = AppTheme.colors.surfaceBackground
+            )
+        }
         Text(
-            text = number.toString(),
-            style = AppTheme.typography.toggleChip,
-            color = AppTheme.colors.surfaceBackground
+            text = label,
+            style = textStyle,
+            color = AppTheme.colors.contentPrimary.copy(PANE_BADGE_TEXT_ALPHA),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
         )
     }
-    Text(
-        text = label,
-        style = textStyle,
-        color = AppTheme.colors.contentPrimary.copy(PANE_BADGE_TEXT_ALPHA),
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis
-    )
-}
 
 @Composable
 private fun EmptyPaneContent(isCompact: Boolean) {

@@ -33,6 +33,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.salat.adb.data.entity.SHIZUKU_HELPER_PORT
 import com.salat.adb.data.entity.TELNET_HELPER_PORT
 import com.salat.resources.R
 import com.salat.settings.common.presentation.RenderGroupDivider
@@ -136,7 +137,7 @@ fun AdbPortToggler(
     if (inputPortDialog) {
         InputPortDialog(
             title = when (adbHelperPort) {
-                7777, 5555 -> ""
+                7777, 5555, TELNET_HELPER_PORT, SHIZUKU_HELPER_PORT -> ""
                 else -> adbHelperPort.toString()
             },
             uiScaleState = uiScale,
@@ -162,12 +163,14 @@ fun AdbPortToggler(
                         adbHelperPort != 7777 &&
                             adbHelperPort != 5555 &&
                             adbHelperPort != TELNET_HELPER_PORT &&
+                            adbHelperPort != SHIZUKU_HELPER_PORT &&
                             adbHelperPort != -1 -> adbHelperPort.toString()
 
                         else -> null
                     }
                 ),
                 SegmentTogglerItem(text = "Telnet"),
+                SegmentTogglerItem(text = "Shizuku"),
                 SegmentTogglerItem(text = offText),
             )
         } else {
@@ -176,6 +179,7 @@ fun AdbPortToggler(
                 SegmentTogglerItem(text = "7777"),
                 SegmentTogglerItem(text = "Custom"),
                 SegmentTogglerItem(text = "Telnet"),
+                SegmentTogglerItem(text = "Shizuku"),
                 SegmentTogglerItem(text = offText),
             )
         }
@@ -194,8 +198,9 @@ fun AdbPortToggler(
                     adbHelperPort == 5555 && enableAdbHelper -> 0
                     adbHelperPort == 7777 && enableAdbHelper -> 1
                     adbHelperPort == TELNET_HELPER_PORT && enableAdbHelper -> 3
+                    adbHelperPort == SHIZUKU_HELPER_PORT && enableAdbHelper -> 4
                     adbHelperPort > 0 && enableAdbHelper -> 2
-                    !enableAdbHelper -> 4
+                    !enableAdbHelper -> 5
                     else -> 0
                 },
                 fontSize = 14,
@@ -215,7 +220,9 @@ fun AdbPortToggler(
 
                     3 -> onSelectPort(TELNET_HELPER_PORT)
 
-                    4 -> onDisable()
+                    4 -> onSelectPort(SHIZUKU_HELPER_PORT)
+
+                    5 -> onDisable()
                 }
             }
         }

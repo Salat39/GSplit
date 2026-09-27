@@ -33,7 +33,8 @@ internal fun FreeWindowPreset.toLauncherDomain() = SplitLaunchWindow(
 internal fun AppPreset.toLauncherDomain() = SplitLaunchApp(
     title = title,
     packageName = packageName,
-    autoPlay = autoPlay
+    autoPlay = autoPlay,
+    withCaption = withCaption
 )
 
 internal fun PresetType.toLauncherDomain() = when (this) {

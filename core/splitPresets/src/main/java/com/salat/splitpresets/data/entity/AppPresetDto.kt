@@ -6,5 +6,6 @@ import kotlinx.serialization.Serializable
 data class AppPresetDto(
     val title: String,
     val packageName: String,
-    val autoPlay: Boolean? = null
+    val autoPlay: Boolean? = null,
+    val withCaption: Boolean = false
 )

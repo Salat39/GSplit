@@ -172,7 +172,8 @@ class SplitPresetsRepositoryImpl(
         title = title,
         packageName = packageName,
         icon = systemApps.getAppIcon(packageName),
-        autoPlay = autoPlay
+        autoPlay = autoPlay,
+        withCaption = withCaption
     )
 
     private fun PresetTypeDto.toDomain() = when (this) {
@@ -211,7 +212,8 @@ class SplitPresetsRepositoryImpl(
     private fun AppPreset.toDto() = AppPresetDto(
         title = title,
         packageName = packageName,
-        autoPlay = autoPlay
+        autoPlay = autoPlay,
+        withCaption = withCaption
     )
 
     private fun PresetType.toDto() = when (this) {

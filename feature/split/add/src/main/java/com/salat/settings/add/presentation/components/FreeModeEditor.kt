@@ -45,6 +45,8 @@ private const val DOCK_SIDE_MARGIN = 16
 internal fun FreeModeEditor(
     windows: List<DisplayFreeWindow>,
     deviceApps: List<DeviceAppInfo>,
+    showWindowType: Boolean,
+    isWindowTypeLocked: Boolean,
     uiScaleState: State<Float>?,
     sendAction: (AddViewModel.Action) -> Unit,
     onBack: () -> Unit,
@@ -79,7 +81,15 @@ internal fun FreeModeEditor(
             list = availableApps,
             uiScaleState = uiScaleState,
             onDismiss = { replaceWindowId = null },
-            onSelect = { app -> app?.let { sendAction(AddViewModel.Action.UpdateFreeWindow(window.copy(app = it))) } }
+            onSelect = { app ->
+                app?.let {
+                    sendAction(
+                        AddViewModel.Action.UpdateFreeWindow(
+                            window.copy(app = it.copy(withCaption = window.app.withCaption))
+                        )
+                    )
+                }
+            }
         )
     }
 
@@ -113,6 +123,8 @@ internal fun FreeModeEditor(
                         otherWindows = windows.filterNot { it.id == window.id },
                         canvasSize = canvasSize,
                         color = freeWindowColor(index),
+                        showWindowType = showWindowType,
+                        isWindowTypeLocked = isWindowTypeLocked,
                         onChange = { sendAction(AddViewModel.Action.UpdateFreeWindow(it)) },
                         onGestureActive = { active -> activeWindowGestures += if (active) 1 else -1 },
                         onAppClick = { replaceWindowId = window.id },

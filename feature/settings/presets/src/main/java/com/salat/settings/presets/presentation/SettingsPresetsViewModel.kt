@@ -2,6 +2,8 @@ package com.salat.settings.presets.presentation
 
 import androidx.compose.runtime.Immutable
 import androidx.lifecycle.viewModelScope
+import com.salat.adb.data.entity.AdbConnectionState
+import com.salat.adb.domain.usecases.AdbConnectionStateUseCase
 import com.salat.preferences.domain.entity.BoolPref
 import com.salat.preferences.domain.entity.IntPref
 import com.salat.preferences.domain.usecases.FlowPrefsUseCase
@@ -31,7 +33,8 @@ internal const val DEFAULT_HEIGHT_CORRECTOR = 0
 class SettingsPresetsViewModel @Inject constructor(
     private val saveIntPrefUseCase: SaveIntPrefUseCase,
     private val saveBoolPrefUseCase: SaveBoolPrefUseCase,
-    private val flowPrefsUseCase: FlowPrefsUseCase
+    private val flowPrefsUseCase: FlowPrefsUseCase,
+    private val adbConnectionStateUseCase: AdbConnectionStateUseCase
 ) : BaseSyncViewModel<SettingsPresetsViewModel.ViewState, SettingsPresetsViewModel.Action>(ViewState()) {
 
     init {
@@ -64,6 +67,11 @@ class SettingsPresetsViewModel @Inject constructor(
                         noCaptionWindows = prefs[9] as Boolean
                     )
                 )
+            }
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            adbConnectionStateUseCase.flow.collect {
+                sendAction(Action.SetAdbConnected(it is AdbConnectionState.Connected))
             }
         }
     }
@@ -169,6 +177,8 @@ class SettingsPresetsViewModel @Inject constructor(
             state.value.copy(noCaptionWindows = viewAction.value)
         }
 
+        is Action.SetAdbConnected -> state.value.copy(adbConnected = viewAction.value)
+
         is Action.InitPrefs -> state.value.copy(
             bypassDelay = viewAction.bypassDelay,
             secondWindowDelay = viewAction.secondWindowDelay,
@@ -194,7 +204,8 @@ class SettingsPresetsViewModel @Inject constructor(
         val experimentalNativeSplit: Boolean? = null,
         val softKillApp: Boolean? = null,
         val heightCorrector: Int = DEFAULT_HEIGHT_CORRECTOR,
-        val noCaptionWindows: Boolean? = null
+        val noCaptionWindows: Boolean? = null,
+        val adbConnected: Boolean = false
     ) : MviViewState
 
     sealed class Action : MviAction {
@@ -230,5 +241,7 @@ class SettingsPresetsViewModel @Inject constructor(
         internal class SetHeightCorrector(val value: Int) : Action()
 
         internal class SetNoCaptionWindows(val value: Boolean?) : Action()
+
+        internal class SetAdbConnected(val value: Boolean) : Action()
     }
 }

@@ -62,8 +62,16 @@
 
     <string name="exp_native_split_title">Экспериментальная нативная реализация разделения</string>
     <string name="exp_native_split_desc">Запуск разделения через Accessibility API. Совместимо с Android 9 и выше. В автомобильных прошивках некоторые необходимые сервисы для запуска могут быть недоступны.</string>
-    <string name="no_caption_windows_title">Окна без верхней панели</string>
-    <string name="no_caption_windows_desc">Убирает у окон верхнюю панель с кнопками. Нужен подключённый ADB-помощник. Минус: при запуске окно может на мгновение мелькнуть. Экспериментальная функция.</string>
+    <string name="no_caption_windows_title">Разрешить окна без верхней панели</string>
+    <string name="no_caption_windows_desc">Позволяет открывать окна без верхней панели с кнопками. Тип выбирается для каждого окна в редакторе пресета, по умолчанию окна открываются без панели. Если выключено, все окна открываются с панелью. Нужен подключённый ADB-помощник. Минус: при запуске окно может на мгновение мелькнуть. Экспериментальная функция.</string>
+    <string name="no_caption_windows_adb_hint">Для включения подключите ADB в разделе «%1$s»</string>
+    <string name="no_caption_windows_sdk_hint">Доступно на Android 11 и новее</string>
+    <string name="window_type_caption">С панелью</string>
+    <string name="window_type_no_caption">Без панели</string>
+    <string name="window_type_caption_toast">%1$s: с панелью</string>
+    <string name="window_type_no_caption_toast">%1$s: без панели</string>
+    <string name="window_type_pinned_hint">Окно поверх остальных всегда открывается с панелью</string>
+    <string name="window_type_adb_hint">Чтобы выбрать тип окна, подключите ADB в разделе «%1$s»</string>
 
     <string name="autoplay">Автостарт воспроизведения</string>
     <string name="autoplay_s">Автовоспроизведение</string>
@@ -203,6 +211,13 @@
     <string name="bottom_window">Нижнее окно</string>
     <string name="left_window">Левое окно</string>
     <string name="right_window">Правое окно</string>
+    <string name="window_number">Окно %d</string>
+    <string name="top_window_short">Верхнее</string>
+    <string name="bottom_window_short">Нижнее</string>
+    <string name="left_window_short">Левое</string>
+    <string name="right_window_short">Правое</string>
+    <string name="both_windows">Оба</string>
+    <string name="show_in_menu">Где показывать в меню</string>
     <string name="add_app">Добавить приложение</string>
     <string name="adding_app">Добавление приложения</string>
     <string name="overlay_size">Размер оверлея</string>
@@ -247,7 +262,7 @@
     <string name="contrast_border">Контрастная рамка</string>
     <string name="contrast_border_desc">Более заметная рамка вокруг элемента последнего запущенного сплита</string>
 
-    <string name="adb_features">ADB &amp; Telnet</string>
+    <string name="adb_features">ADB, Telnet &amp; Shizuku</string>
     <string name="adb_features_description">Часть функций работает полноценно только через ADB. Подключите его, чтобы использовать все возможности приложения</string>
     <string name="adb_helper">ADB-помощник</string>
     <string name="adb_helper_description">Разблокирует функции связанные с выполнением ADB команд</string>
@@ -266,6 +281,7 @@
     <string name="new_version_available">Доступна новая версия</string>
     <string name="details">Подробнее</string>
     <string name="download">Скачать</string>
+    <string name="skip">Пропустить</string>
     <string name="data_fetch_failed">Не удалось получить данные. Проверьте интернет</string>
     <string name="off">Выкл.</string>
     <string name="enter_your_port">Введите свой номер порта</string>
@@ -351,16 +367,16 @@
 <br>
 <strong>Действие 6</strong>: \"com.salat.gsplit.CUSTOM_LAUNCH\"
 <br>
-Параметры: first_package, second_package, first_auto_play:[0|1], second_auto_play:[0|1], type:[1x1|2x1|…], dark_background:[0|1], window_shift:[0|1]
+Параметры: first_package, second_package, first_auto_play:[0|1], second_auto_play:[0|1], type:[1x1|2x1|…], dark_background:[0|1], window_shift:[0|1], first_caption:[0|1], second_caption:[0|1]
 <br>
-Запускает сплит по указанной конфигурации.
+Запускает сплит по указанной конфигурации. first_caption и second_caption задают тип окна: 1 — с панелью сверху, 0 — без панели сверху (по умолчанию). Без панели окна открываются, только если включена настройка «Разрешить окна без верхней панели» и подключён ADB.
 <br>
 <br>
 <strong>Действие 7</strong>: \"com.salat.gsplit.FREE_LAUNCH\"
 <br>
-Параметры: package, x:[0..100], y:[0..100], width:[1..100], height:[1..100], auto_play:[0|1], pin:[0|1]
+Параметры: package, x:[0..100], y:[0..100], width:[1..100], height:[1..100], auto_play:[0|1], pin:[0|1], caption:[0|1]
 <br>
-Запускает приложение в свободном окне. Позиция и размер задаются в процентах от области экрана между статус-баром и панелью навигации. Закреплённое окно остаётся поверх других окон. Закрывает текущий сплит, если он открыт.
+Запускает приложение в свободном окне. Позиция и размер задаются в процентах от области экрана между статус-баром и панелью навигации. Закреплённое окно остаётся поверх других окон и всегда открывается с панелью сверху. caption задаёт тип окна: 1 — с панелью сверху, 0 — без панели сверху (по умолчанию). Без панели окно открывается, только если включена настройка «Разрешить окна без верхней панели» и подключён ADB. Закрывает текущий сплит, если он открыт.
 <br>
 <br>
 <strong>Действие 8</strong>: \"com.salat.gsplit.TOGGLE_PRESET_PANEL\"

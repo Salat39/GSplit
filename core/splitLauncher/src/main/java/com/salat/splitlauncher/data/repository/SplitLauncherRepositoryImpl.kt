@@ -115,6 +115,8 @@ class SplitLauncherRepositoryImpl(
 
     private var plannedMediaTask = ""
 
+    private var launchedFreeTask: SplitLaunchTask? = null
+
     init {
         ioScope.launch {
             collectMediaState()
@@ -122,11 +124,19 @@ class SplitLauncherRepositoryImpl(
         }
     }
 
-    override suspend fun launchSplit(task: SplitLaunchTask, source: SplitLaunchSource) {
+    override suspend fun launchSplit(task: SplitLaunchTask, source: SplitLaunchSource) =
+        launchSplit(task, source, replacedFreeWindow = null)
+
+    private suspend fun launchSplit(
+        task: SplitLaunchTask,
+        source: SplitLaunchSource,
+        replacedFreeWindow: SplitLaunchWindow?
+    ) {
         val isFree = task.type == SplitLaunchType.FREE
         // Pinned windows start last. The window tracking expects the last launched window on top
         val freeWindows = task.windows.distinctBy { it.app.packageName }.sortedBy { it.alwaysOnTop }
-        val launchApps = if (isFree) freeWindows.map { it.app } else listOfNotNull(task.firstApp, task.secondApp)
+        val startedFreeWindows = replacedFreeWindow?.let { listOf(it) } ?: freeWindows
+        val launchApps = if (isFree) startedFreeWindows.map { it.app } else listOfNotNull(task.firstApp, task.secondApp)
         val noCaptionWindows = resolveNoCaptionWindows()
         // Windows without caption do not overlap, the bottom window shift is only for the legacy freeform flow
         val shiftBottomWindow = task.bottomWindowShift && !noCaptionWindows
@@ -142,13 +152,18 @@ class SplitLauncherRepositoryImpl(
                 type = task.type.toLaunchedType(),
                 presetId = task.id,
                 sessionId = System.currentTimeMillis(),
-                freeWindowPackages = launchApps.map { it.packageName }
+                freeWindowPackages = freeWindows.map { it.app.packageName },
+                freePresetWindowPackages = task.windows.map { it.app.packageName }
             )
         } else {
             LaunchedWindowsConfig(
                 firstAppPackage = task.firstApp?.packageName ?: stateKeeper.getLaunchedWindows()?.firstAppPackage ?: "",
                 secondAppPackage = task.secondApp?.packageName
                     ?: stateKeeper.getLaunchedWindows()?.secondAppPackage ?: "",
+                firstWithCaption = task.firstApp?.withCaption
+                    ?: stateKeeper.getLaunchedWindows()?.firstWithCaption ?: false,
+                secondWithCaption = task.secondApp?.withCaption
+                    ?: stateKeeper.getLaunchedWindows()?.secondWithCaption ?: false,
                 autoStart = task.autoStart,
                 darkBackground = task.darkBackground,
                 bottomWindowShift = shiftBottomWindow,
@@ -159,6 +174,7 @@ class SplitLauncherRepositoryImpl(
             )
         }
         stateKeeper.setLaunchedWindows(launchConfig)
+        launchedFreeTask = task.takeIf { isFree }
         saveLastLaunchedTask(task)
 
         bypassHiddenApiRestrictions()
@@ -226,7 +242,7 @@ class SplitLauncherRepositoryImpl(
         }
 
         // Cast dark screen by preset settings
-        if (task.darkBackground) {
+        if (task.darkBackground && replacedFreeWindow == null) {
             val hideByCloseDarkScreen = when (source) {
                 SplitLaunchSource.CLICK -> minimizeByStart
                 SplitLaunchSource.SHORTCUT -> false
@@ -251,7 +267,7 @@ class SplitLauncherRepositoryImpl(
             task.secondApp?.packageName == YAM_PACKAGE && task.secondApp.autoPlay == true
 
         if (isFree) {
-            launchFreeWindows(freeWindows, heightCorrector, secondWindowDelay, noCaptionWindows)
+            launchFreeWindows(startedFreeWindows, heightCorrector, secondWindowDelay, noCaptionWindows)
         } else {
             var isFirst = true
             windowsDirection.forEach { windowType ->
@@ -286,7 +302,7 @@ class SplitLauncherRepositoryImpl(
                                 customRatio = task.ratio,
                                 bottomWindowShift = bottomWindowShift,
                                 heightCorrector = heightCorrector,
-                                noCaption = noCaptionWindows
+                                noCaption = noCaptionWindows && !app.withCaption
                             )
                         }
 
@@ -313,7 +329,7 @@ class SplitLauncherRepositoryImpl(
                                 customRatio = task.ratio,
                                 bottomWindowShift = bottomWindowShift,
                                 heightCorrector = heightCorrector,
-                                noCaption = noCaptionWindows
+                                noCaption = noCaptionWindows && !app.withCaption
                             )
                         }
                         isFirst = false
@@ -639,7 +655,7 @@ class SplitLauncherRepositoryImpl(
                 statusBarHeight + (window.bottom * screenHeight).roundToInt()
             )
             // A pinned window keeps the caption. The user moves and closes the window with the caption
-            val windowNoCaption = noCaption && !window.alwaysOnTop
+            val windowNoCaption = noCaption && !window.alwaysOnTop && !window.app.withCaption
             startAppInBounds(context, window.app.packageName, bounds, window.alwaysOnTop, windowNoCaption)
             delay(windowDelay)
         }
@@ -698,14 +714,16 @@ class SplitLauncherRepositoryImpl(
                 LastLaunchedApp(
                     title = task.firstApp.title,
                     packageName = task.firstApp.packageName,
-                    autoPlay = task.firstApp.autoPlay
+                    autoPlay = task.firstApp.autoPlay,
+                    withCaption = task.firstApp.withCaption
                 )
             } else null
             val secondApp = if (task.secondApp?.packageName?.isNotEmpty() == true) {
                 LastLaunchedApp(
                     title = task.secondApp.title,
                     packageName = task.secondApp.packageName,
-                    autoPlay = task.secondApp.autoPlay
+                    autoPlay = task.secondApp.autoPlay,
+                    withCaption = task.secondApp.withCaption
                 )
             } else null
             launchHistory.patchLastConfig(firstApp, secondApp)
@@ -797,15 +815,21 @@ class SplitLauncherRepositoryImpl(
         stateKeeper.splitLauncherEvents.collect { event ->
             when (event) {
                 is SplitLauncherEvent.LaunchWindow -> {
-                    if (event.type == LaunchedSplitType.FREE) return@collect
-
-                    val window = SplitLaunchApp(
-                        title = event.packageName,
-                        packageName = event.packageName,
-                        autoPlay = event.autoPlay
-                    )
+                    if (event.type == LaunchedSplitType.FREE) {
+                        replaceFreeWindow(event)
+                        return@collect
+                    }
 
                     stateKeeper.getLaunchedWindows()?.let { currentConfig ->
+                        val window = SplitLaunchApp(
+                            title = event.packageName,
+                            packageName = event.packageName,
+                            autoPlay = event.autoPlay,
+                            withCaption = if (event.index == 0) {
+                                currentConfig.firstWithCaption
+                            } else currentConfig.secondWithCaption
+                        )
+
                         launchSplit(
                             SplitLaunchTask(
                                 firstApp = if (event.index == 0) window else null,
@@ -823,6 +847,15 @@ class SplitLauncherRepositoryImpl(
                 }
             }
         }
+    }
+
+    private suspend fun replaceFreeWindow(event: SplitLauncherEvent.LaunchWindow) {
+        val task = launchedFreeTask ?: return
+        val slot = task.windows.getOrNull(event.index) ?: return
+        val app = slot.app.copy(title = event.packageName, packageName = event.packageName, autoPlay = event.autoPlay)
+        val window = slot.copy(app = app)
+        val windows = task.windows.toMutableList().apply { set(event.index, window) }
+        launchSplit(task.copy(windows = windows), SplitLaunchSource.BROADCAST, replacedFreeWindow = window)
     }
 
     private suspend fun sendInitSplitBroadcast(task: SplitLaunchTask) {
@@ -1002,7 +1035,8 @@ class SplitLauncherRepositoryImpl(
     private fun SplitLaunchApp.toLastLaunchedApp() = LastLaunchedApp(
         title = this.title,
         packageName = this.packageName,
-        autoPlay = this.autoPlay
+        autoPlay = this.autoPlay,
+        withCaption = this.withCaption
     )
 
     private fun SplitLaunchType.toLastLaunchedType() = LastLaunchedType.entries.first { it.id == this.id }

@@ -38,7 +38,8 @@ internal fun AppPreset.toDisplay() = DisplayAppPreset(
     title = title,
     packageName = packageName,
     icon = if (icon is Drawable) icon as Drawable else null,
-    autoPlay = autoPlay
+    autoPlay = autoPlay,
+    withCaption = withCaption
 )
 
 internal fun PresetType.toDisplay() = when (this) {

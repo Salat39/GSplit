@@ -17,9 +17,15 @@ internal class TelnetShellTransport private constructor(
     fun exec(command: String, marker: String): Pair<String, Int> {
         socket.soTimeout = READ_TIMEOUT_MS
         val effectiveCommand = appendMarker(command, marker) + "\n"
-        output.write(effectiveCommand.toByteArray(StandardCharsets.UTF_8))
-        output.flush()
-        return readResponseUntilMarker(marker)
+        try {
+            output.write(effectiveCommand.toByteArray(StandardCharsets.UTF_8))
+            output.flush()
+        } catch (e: IOException) {
+            throw TelnetSessionClosedException(e)
+        }
+        val response = readResponseUntilMarker(marker)
+        if (response.isEmpty()) throw TelnetSessionClosedException()
+        return parseResponse(response, marker)
     }
 
     fun isClosed() = socket.isClosed
@@ -35,7 +41,7 @@ internal class TelnetShellTransport private constructor(
         }
     }
 
-    private fun readResponseUntilMarker(marker: String): Pair<String, Int> {
+    private fun readResponseUntilMarker(marker: String): String {
         val collected = ByteArrayOutputStream()
         val buf = ByteArray(4096)
         val markerBytes = marker.toByteArray(StandardCharsets.US_ASCII)
@@ -46,6 +52,8 @@ internal class TelnetShellTransport private constructor(
                 input.read(buf)
             } catch (e: SocketTimeoutException) {
                 if (markerSeen) break else throw e
+            } catch (e: IOException) {
+                if (collected.size() == 0) -1 else throw e
             }
             if (len == -1) break
 
@@ -68,13 +76,13 @@ internal class TelnetShellTransport private constructor(
                 }
             }
 
-            if (!markerSeen && containsSequence(collected, markerBytes)) {
+            if (!markerSeen && containsMarkerWithExitCode(collected, markerBytes)) {
                 markerSeen = true
                 socket.soTimeout = TRAILING_DRAIN_MS
             }
         }
 
-        return parseResponse(String(collected.toByteArray(), StandardCharsets.UTF_8), marker)
+        return String(collected.toByteArray(), StandardCharsets.UTF_8)
     }
 
     private fun parseResponse(full: String, marker: String): Pair<String, Int> {
@@ -172,20 +180,23 @@ internal class TelnetShellTransport private constructor(
             return num
         }
 
-        private fun containsSequence(haystack: ByteArrayOutputStream, needle: ByteArray): Boolean {
+        // The terminal echo of the command also has the marker. Only the command output has the exit code after it
+        private fun containsMarkerWithExitCode(haystack: ByteArrayOutputStream, marker: ByteArray): Boolean {
             val data = haystack.toByteArray()
-            if (data.size < needle.size) return false
-            for (i in 0..data.size - needle.size) {
+            for (i in 0 until data.size - marker.size) {
                 var matched = true
-                for (j in needle.indices) {
-                    if (data[i + j] != needle[j]) {
+                for (j in marker.indices) {
+                    if (data[i + j] != marker[j]) {
                         matched = false
                         break
                     }
                 }
-                if (matched) return true
+                if (matched && data[i + marker.size].toInt().toChar() in '0'..'9') return true
             }
             return false
         }
     }
 }
+
+internal class TelnetSessionClosedException(cause: Throwable? = null) :
+    IOException("Telnet session closed by the server", cause)

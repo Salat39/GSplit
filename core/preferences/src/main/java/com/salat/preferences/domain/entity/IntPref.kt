@@ -13,6 +13,7 @@ private object IntPrefKey {
     const val HEIGHT_CORRECTOR = "HEIGHT_CORRECTOR"
     const val WINDOW_CLOSING_EXTRA_PAUSE = "WINDOW_CLOSING_EXTRA_PAUSE"
     const val ADB_HELPER_PORT = "ADB_HELPER_PORT"
+    const val SKIPPED_UPDATE_CODE = "SKIPPED_UPDATE_CODE"
 }
 
 sealed class IntPref(override val key: String, override val default: Int) : AnyPref {
@@ -38,4 +39,6 @@ sealed class IntPref(override val key: String, override val default: Int) : AnyP
     data object WindowClosingExtraPause : IntPref(IntPrefKey.WINDOW_CLOSING_EXTRA_PAUSE, 100)
 
     data object AdbHelperPort : IntPref(IntPrefKey.ADB_HELPER_PORT, 5555)
+
+    data object SkippedUpdateCode : IntPref(IntPrefKey.SKIPPED_UPDATE_CODE, 0)
 }

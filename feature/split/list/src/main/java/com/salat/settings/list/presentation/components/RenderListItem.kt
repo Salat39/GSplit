@@ -84,6 +84,8 @@ private val LiftBorderWidth = 1.5.dp
 private val NudgeAmplitude = 4.dp
 private const val NUDGE_DURATION_MILLIS = 450
 
+private const val CAPTION_GLYPH_GAP_EM = .36f
+
 private data class CardFrame(
     val color: Color,
     @StringRes val titleRes: Int,
@@ -96,6 +98,7 @@ internal fun RenderListItem(
     preset: DisplaySplitPreset,
     type: RenderListType,
     showWindowShift: Boolean = true,
+    showWindowType: Boolean = false,
     dragHandle: Modifier? = null,
     lifted: Boolean = false,
     onClick: () -> Unit,
@@ -172,9 +175,9 @@ internal fun RenderListItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (preset.type == DisplayPresetType.FREE) {
-                FreePresetContent(preset = preset, modifier = Modifier.weight(1f))
+                FreePresetContent(preset = preset, showWindowType = showWindowType, modifier = Modifier.weight(1f))
             } else {
-                SplitPresetContent(preset = preset, showWindowShift = showWindowShift)
+                SplitPresetContent(preset = preset, showWindowShift = showWindowShift, showWindowType = showWindowType)
             }
 
             dragHandle?.let { DragHandle(modifier = it, nudge = handleNudge, lifted = lifted) }
@@ -252,30 +255,41 @@ private fun CardFrameEdge(frame: CardFrame, isTop: Boolean) {
 }
 
 @Composable
-private fun RowScope.SplitPresetContent(preset: DisplaySplitPreset, showWindowShift: Boolean) = BoxWithConstraints(
-    modifier = Modifier.weight(1f)
-) {
-    val iconSize = if (maxWidth < CompactRowWidth) CompactIconSize else RegularIconSize
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        AppIcon(app = preset.firstApp, size = iconSize, playBadgeAtEnd = true)
+private fun RowScope.SplitPresetContent(preset: DisplaySplitPreset, showWindowShift: Boolean, showWindowType: Boolean) =
+    BoxWithConstraints(
+        modifier = Modifier.weight(1f)
+    ) {
+        val iconSize = if (maxWidth < CompactRowWidth) CompactIconSize else RegularIconSize
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            AppIcon(app = preset.firstApp, size = iconSize, playBadgeAtEnd = true)
 
-        Spacer(Modifier.width(IconTextGap))
+            Spacer(Modifier.width(IconTextGap))
 
-        AppTexts(app = preset.firstApp, alignEnd = false, modifier = Modifier.weight(1f))
+            AppTexts(
+                app = preset.firstApp,
+                alignEnd = false,
+                showCaption = showWindowType && preset.firstApp.withCaption,
+                modifier = Modifier.weight(1f)
+            )
 
-        RatioColumn(
-            preset = preset,
-            showWindowShift = showWindowShift,
-            modifier = Modifier.padding(horizontal = RatioColumnPadding)
-        )
+            RatioColumn(
+                preset = preset,
+                showWindowShift = showWindowShift,
+                modifier = Modifier.padding(horizontal = RatioColumnPadding)
+            )
 
-        AppTexts(app = preset.secondApp, alignEnd = true, modifier = Modifier.weight(1f))
+            AppTexts(
+                app = preset.secondApp,
+                alignEnd = true,
+                showCaption = showWindowType && preset.secondApp.withCaption,
+                modifier = Modifier.weight(1f)
+            )
 
-        Spacer(Modifier.width(IconTextGap))
+            Spacer(Modifier.width(IconTextGap))
 
-        AppIcon(app = preset.secondApp, size = iconSize, playBadgeAtEnd = false)
+            AppIcon(app = preset.secondApp, size = iconSize, playBadgeAtEnd = false)
+        }
     }
-}
 
 @Composable
 private fun AppIcon(app: DisplayAppPreset, size: Dp, playBadgeAtEnd: Boolean) = Box(
@@ -317,7 +331,7 @@ private fun AppIcon(app: DisplayAppPreset, size: Dp, playBadgeAtEnd: Boolean) = 
 }
 
 @Composable
-private fun AppTexts(app: DisplayAppPreset, alignEnd: Boolean, modifier: Modifier) = Column(
+private fun AppTexts(app: DisplayAppPreset, alignEnd: Boolean, showCaption: Boolean, modifier: Modifier) = Column(
     modifier = modifier,
     horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start
 ) {
@@ -329,13 +343,26 @@ private fun AppTexts(app: DisplayAppPreset, alignEnd: Boolean, modifier: Modifie
         textAlign = if (alignEnd) TextAlign.End else TextAlign.Start,
         color = AppTheme.colors.contentPrimary
     )
-    Text(
-        text = app.packageName,
-        style = AppTheme.typography.dialogSubtitle,
-        overflow = TextOverflow.Ellipsis,
-        maxLines = 1,
-        color = AppTheme.colors.contentPrimary.copy(.4f)
-    )
+    val packageStyle = AppTheme.typography.dialogSubtitle
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(
+            packageStyle.emToDp(CAPTION_GLYPH_GAP_EM),
+            if (alignEnd) Alignment.End else Alignment.Start
+        ),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        val glyphTint = AppTheme.colors.contentPrimary.copy(.5f)
+        if (showCaption && !alignEnd) WindowCaptionGlyph(textStyle = packageStyle, tint = glyphTint)
+        Text(
+            text = app.packageName,
+            style = packageStyle,
+            overflow = TextOverflow.Ellipsis,
+            maxLines = 1,
+            color = AppTheme.colors.contentPrimary.copy(.4f),
+            modifier = Modifier.weight(1f, fill = false)
+        )
+        if (showCaption && alignEnd) WindowCaptionGlyph(textStyle = packageStyle, tint = glyphTint)
+    }
 }
 
 @Composable

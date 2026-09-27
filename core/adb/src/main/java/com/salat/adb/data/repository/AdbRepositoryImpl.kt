@@ -1,10 +1,12 @@
 package com.salat.adb.data.repository
 
+import android.content.pm.PackageManager
 import android.graphics.Rect
 import android.util.Base64
 import com.salat.adb.BuildConfig
 import com.salat.adb.data.entity.AdbConnectionState
 import com.salat.adb.data.entity.AdbRecentTaskInfo
+import com.salat.adb.data.entity.SHIZUKU_HELPER_PORT
 import com.salat.adb.data.entity.TELNET_HELPER_PORT
 import com.salat.adb.domain.repository.AdbRepository
 import com.salat.preferences.domain.DataStoreRepository
@@ -33,6 +35,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import rikka.shizuku.Shizuku
 import timber.log.Timber
 
 class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbRepository {
@@ -46,6 +49,7 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
         private const val NEW_TASK_LOOKUP_INTERVAL_SEC = "0.05"
 
         private const val DONE_PREFIX = "__ADB_DONE__:"
+        private const val SHIZUKU_PERMISSION_REQUEST_CODE = 668
     }
 
     private val host
@@ -82,6 +86,12 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
 
     @Volatile
     private var telnetTransport: TelnetShellTransport? = null
+
+    @Volatile
+    private var shizukuTransport: ShizukuShellTransport? = null
+
+    @Volatile
+    private var shizukuPermissionRequested = false
 
     private val taskIdRegex = Regex(
         pattern = """\bTask\{[^}]*#(\d+)\b""",
@@ -125,12 +135,26 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
                 }
             }
         }
+
+        Shizuku.addBinderReceivedListenerSticky { reconnectShizukuIfSelected() }
+        Shizuku.addBinderDeadListener {
+            ioScope.launch { dropDeadShizukuTransport() }
+        }
+        Shizuku.addRequestPermissionResultListener { requestCode, grantResult ->
+            if (requestCode == SHIZUKU_PERMISSION_REQUEST_CODE && grantResult == PackageManager.PERMISSION_GRANTED) {
+                reconnectShizukuIfSelected()
+            }
+        }
     }
 
     /**
      * Connects to adbd at host:port with ephemeral RSA keys; idempotent.
      */
-    suspend fun connect(host: String, port: Int) = if (isTelnetMode(port)) connectTelnet() else connectAdb(host, port)
+    suspend fun connect(host: String, port: Int) = when {
+        isTelnetMode(port) -> connectTelnet()
+        isShizukuMode(port) -> connectShizuku()
+        else -> connectAdb(host, port)
+    }
 
     private suspend fun connectAdb(host: String, port: Int): Boolean = withContext(Dispatchers.IO) {
         lock.withLock {
@@ -297,7 +321,11 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
         if (command.isEmpty()) return@withContext "empty command"
 
         try {
-            if (isTelnetMode(port)) executeTelnetLocked(command) else executeLocked(command)
+            when {
+                isTelnetMode(port) -> executeTelnetWithReconnect(command)
+                isShizukuMode(port) -> executeShizukuLocked(command)
+                else -> executeLocked(command)
+            }
         } catch (t: CommandFailedException) {
             // Command-level failure: connection is alive (marker reached), no reconnect required.
             Timber.w(
@@ -696,6 +724,7 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
     suspend fun disconnect() = withContext(Dispatchers.IO) {
         Timber.d("[ADB] disconnect")
         isManuallyDisconnected = true
+        shizukuPermissionRequested = false
         cancelReconnectLoop()
 
         // Invalidate any in-flight connect/execute so they can't resurrect the connection.
@@ -760,6 +789,17 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
         }
     }
 
+    // A telnet server can close an idle session while the client still reports a connection
+    private suspend fun executeTelnetWithReconnect(command: String): String = try {
+        executeTelnetLocked(command)
+    } catch (e: TelnetSessionClosedException) {
+        if (isManuallyDisconnected) throw e
+        Timber.w(e, "[Telnet] session closed, reconnect")
+        dropConnectionForRetry(e)
+        if (!connectTelnet()) throw e
+        executeTelnetLocked(command)
+    }
+
     private suspend fun executeTelnetLocked(command: String): String = lock.withLock {
         val (transport, myEpoch) = synchronized(connGuard) {
             val t = checkNotNull(telnetTransport) { "Telnet is not connected" }
@@ -784,6 +824,31 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
         }
 
         output.also { Timber.d("[Telnet] result length=%d", it.length) }
+    }
+
+    private suspend fun executeShizukuLocked(command: String): String = lock.withLock {
+        val (transport, myEpoch) = synchronized(connGuard) {
+            val t = checkNotNull(shizukuTransport) { "Shizuku is not connected" }
+            t to connectionEpoch
+        }
+
+        Timber.d("[Shizuku] execute: %s", command)
+
+        synchronized(connGuard) {
+            check(connectionEpoch == myEpoch && !isManuallyDisconnected) { "Shizuku disconnected" }
+        }
+
+        val (output, exitCode) = transport.exec(command)
+
+        synchronized(connGuard) {
+            check(connectionEpoch == myEpoch && !isManuallyDisconnected) { "Shizuku disconnected" }
+        }
+
+        if (exitCode != 0) {
+            throw CommandFailedException(exitCode, output)
+        }
+
+        output.also { Timber.d("[Shizuku] result length=%d", it.length) }
     }
 
     private fun buildDoneMarker(): String {
@@ -868,7 +933,11 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
      * Fast in-memory liveness check; not a protocol-level ping.
      */
     private fun isConnectedForPortUnsafe(port: Int): Boolean {
-        return if (isTelnetMode(port)) isTelnetConnectedUnsafe() else isAdbConnectedUnsafe()
+        return when {
+            isTelnetMode(port) -> isTelnetConnectedUnsafe()
+            isShizukuMode(port) -> isShizukuConnectedUnsafe()
+            else -> isAdbConnectedUnsafe()
+        }
     }
 
     private fun isAdbConnectedUnsafe(): Boolean = synchronized(connGuard) {
@@ -882,24 +951,33 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
         t != null && !t.isClosed() && !isManuallyDisconnected
     }
 
+    private fun isShizukuConnectedUnsafe(): Boolean {
+        val published = synchronized(connGuard) { shizukuTransport != null && !isManuallyDisconnected }
+        return published && Shizuku.pingBinder()
+    }
+
     private fun forceCloseNow() {
         // Closes transport immediately, without waiting for the main execution lock.
         val toCloseConn: AdbConnection?
         val toCloseSocket: Socket?
         val toCloseTelnet: TelnetShellTransport?
+        val toCloseShizuku: ShizukuShellTransport?
 
         synchronized(connGuard) {
             toCloseConn = connection
             toCloseSocket = socket
             toCloseTelnet = telnetTransport
+            toCloseShizuku = shizukuTransport
             connection = null
             socket = null
             telnetTransport = null
+            shizukuTransport = null
         }
 
         runCatching { toCloseConn?.close() }
         runCatching { toCloseSocket?.close() }
         runCatching { toCloseTelnet?.close() }
+        toCloseShizuku?.close()
     }
 
     /**
@@ -909,14 +987,17 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
         val toCloseConn: AdbConnection?
         val toCloseSocket: Socket?
         val toCloseTelnet: TelnetShellTransport?
+        val toCloseShizuku: ShizukuShellTransport?
 
         synchronized(connGuard) {
             toCloseConn = connection
             toCloseSocket = socket
             toCloseTelnet = telnetTransport
+            toCloseShizuku = shizukuTransport
             connection = null
             socket = null
             telnetTransport = null
+            shizukuTransport = null
         }
 
         try {
@@ -934,6 +1015,7 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
         } catch (t: Throwable) {
             Timber.w(t, "[Telnet] socket close error")
         }
+        toCloseShizuku?.close()
     }
 
     private suspend fun connectTelnet(): Boolean = withContext(Dispatchers.IO) {
@@ -994,7 +1076,83 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
         }
     }
 
+    private suspend fun connectShizuku(): Boolean = withContext(Dispatchers.IO) {
+        lock.withLock {
+            val myEpoch = synchronized(connGuard) { connectionEpoch }
+
+            isManuallyDisconnected = false
+
+            if (isShizukuConnectedUnsafe()) {
+                _connectionState.value = AdbConnectionState.Connected
+                Timber.d("[Shizuku] connect skipped: already connected")
+                cancelReconnectLoop()
+                return@withLock true
+            }
+
+            _connectionState.value = AdbConnectionState.Connecting
+
+            try {
+                requestShizukuPermissionOnce()
+                val transport = ShizukuShellTransport.connect()
+
+                synchronized(connGuard) {
+                    if (connectionEpoch != myEpoch || isManuallyDisconnected) {
+                        _connectionState.value = AdbConnectionState.Disconnected
+                        return@withLock false
+                    }
+                    runCatching { connection?.close() }
+                    runCatching { socket?.close() }
+                    telnetTransport?.close()
+                    connection = null
+                    socket = null
+                    telnetTransport = null
+                    shizukuTransport = transport
+                }
+
+                _connectionState.value = AdbConnectionState.Connected
+                Timber.d("[Shizuku] connected")
+                cancelReconnectLoop()
+                true
+            } catch (t: Throwable) {
+                _connectionState.value = AdbConnectionState.Error(t.message ?: "Shizuku connect error")
+                Timber.w(t, "[Shizuku] connect error")
+                safeClose()
+                scheduleReconnect(host, SHIZUKU_HELPER_PORT, "shizuku connect error")
+                false
+            }
+        }
+    }
+
+    private fun requestShizukuPermissionOnce() {
+        if (shizukuPermissionRequested || !Shizuku.pingBinder() || Shizuku.isPreV11()) return
+        val isDecided = Shizuku.checkSelfPermission() == PackageManager.PERMISSION_GRANTED ||
+            Shizuku.shouldShowRequestPermissionRationale()
+        if (isDecided) return
+        shizukuPermissionRequested = true
+        Shizuku.requestPermission(SHIZUKU_PERMISSION_REQUEST_CODE)
+    }
+
+    private suspend fun dropDeadShizukuTransport() = lock.withLock {
+        if (Shizuku.pingBinder()) return@withLock
+
+        val transport = synchronized(connGuard) {
+            shizukuTransport.also { shizukuTransport = null }
+        } ?: return@withLock
+
+        transport.close()
+        _connectionState.value = AdbConnectionState.Error("Shizuku is not running")
+    }
+
+    private fun reconnectShizukuIfSelected() = ioScope.launch {
+        if (isShizukuSelected()) reconnect()
+    }
+
+    private suspend fun isShizukuSelected() = dataStore.getBooleanPrefFlow(BoolPref.EnableAdbHelper).first() &&
+        isShizukuMode(dataStore.getIntPrefFlow(IntPref.AdbHelperPort).first())
+
     private fun isTelnetMode(port: Int) = port == TELNET_HELPER_PORT
+
+    private fun isShizukuMode(port: Int) = port == SHIZUKU_HELPER_PORT
 
     private fun isValidPackageName(value: String): Boolean {
         if (!value.contains('.')) return false

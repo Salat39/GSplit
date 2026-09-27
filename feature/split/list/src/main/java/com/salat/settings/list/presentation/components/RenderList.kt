@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import com.salat.resources.R
 import com.salat.settings.list.presentation.ListViewModel
+import com.salat.settings.list.presentation.entity.DisplayPresetType
 import com.salat.settings.list.presentation.entity.DisplaySplitPreset
 import com.salat.settings.list.presentation.entity.RenderListType
 import com.salat.settings.list.presentation.entity.UiDownloadState
@@ -199,7 +200,8 @@ internal fun RenderList(
                     RenderAppUpdate(
                         info = info,
                         updateDownloadState = state.updateDownloadState,
-                        onStartDownload = { url -> sendAction(ListViewModel.Action.StartDownloadUpdate(url)) }
+                        onStartDownload = { url -> sendAction(ListViewModel.Action.StartDownloadUpdate(url)) },
+                        onSkip = { sendAction(ListViewModel.Action.SkipAppUpdate(info.code)) }
                     )
 
                     LaunchedEffect(state.updateDownloadState) {
@@ -237,6 +239,7 @@ internal fun RenderList(
                                 RenderListType.HISTORY_CONTRAST
                             } else RenderListType.HISTORY,
                             showWindowShift = !state.noCaptionWindows,
+                            showWindowType = state.isWindowTypeVisible(history),
                             onClick = {
                                 sendAction(ListViewModel.Action.PrepareOpenSplit(history))
                             },
@@ -281,6 +284,7 @@ internal fun RenderList(
                     preset,
                     RenderListType.PRESET,
                     showWindowShift = !state.noCaptionWindows,
+                    showWindowType = state.isWindowTypeVisible(preset),
                     dragHandle = if (state.reorderMode) {
                         Modifier.presetDragHandle(dragState, preset.id) { context.vibrate() }
                     } else null,
@@ -298,3 +302,7 @@ internal fun RenderList(
         }
     }
 }
+
+// Native split ignores the window type and does not apply to free presets
+private fun ListViewModel.ViewState.isWindowTypeVisible(preset: DisplaySplitPreset) =
+    noCaptionWindows && (preset.type == DisplayPresetType.FREE || !nativeSplit)

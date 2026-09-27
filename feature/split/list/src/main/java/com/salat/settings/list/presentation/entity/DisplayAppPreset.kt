@@ -8,5 +8,6 @@ data class DisplayAppPreset(
     val title: String,
     val packageName: String,
     val icon: Drawable?,
-    val autoPlay: Boolean? = null
+    val autoPlay: Boolean? = null,
+    val withCaption: Boolean = false
 )

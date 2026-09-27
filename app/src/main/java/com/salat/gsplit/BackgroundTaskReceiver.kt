@@ -92,6 +92,8 @@ class BackgroundTaskReceiver : BroadcastReceiver() {
                 val type = intent.getStringExtra("type") ?: ""
                 val darkBackground = intent.getIntExtra("dark_background", 0)
                 val windowShift = intent.getIntExtra("window_shift", 0)
+                val firstCaption = intent.getIntExtra("first_caption", 0)
+                val secondCaption = intent.getIntExtra("second_caption", 0)
 
                 stateKeeper.sendAccessibilityServiceEvent(
                     AccessibilityServiceEvent.ReplaceSplit(
@@ -101,7 +103,9 @@ class BackgroundTaskReceiver : BroadcastReceiver() {
                         secondAutoPlay = secondAutoPlay,
                         type = type,
                         darkBackground = darkBackground,
-                        windowShift = windowShift
+                        windowShift = windowShift,
+                        firstCaption = firstCaption,
+                        secondCaption = secondCaption
                     )
                 )
             }
@@ -120,6 +124,7 @@ class BackgroundTaskReceiver : BroadcastReceiver() {
                     .putExtra("free_bounds", intArrayOf(x, y, x + width, y + height).map { it / 100f }.toFloatArray())
                     .putExtra("free_auto_play", intent.getIntExtra("auto_play", 0) == 1)
                     .putExtra("free_pin", intent.getIntExtra("pin", 0) == 1)
+                    .putExtra("free_caption", intent.getIntExtra("caption", 0) == 1)
 
                 stateKeeper.sendAccessibilityServiceEvent(
                     AccessibilityServiceEvent.CloseCurrentWindows {

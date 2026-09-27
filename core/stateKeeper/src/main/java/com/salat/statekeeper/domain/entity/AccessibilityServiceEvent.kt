@@ -20,7 +20,9 @@ sealed class AccessibilityServiceEvent {
         val secondAutoPlay: Int,
         val type: String,
         val darkBackground: Int,
-        val windowShift: Int
+        val windowShift: Int,
+        val firstCaption: Int,
+        val secondCaption: Int
     ) : AccessibilityServiceEvent()
 
     data class LaunchLast(val fromPresetPanel: Boolean = false) : AccessibilityServiceEvent()

@@ -29,6 +29,8 @@ import com.salat.preferences.domain.entity.BoolPref
 import com.salat.preferences.domain.entity.IntPref
 import com.salat.resources.R
 import com.salat.statekeeper.domain.entity.AccessibilityServiceEvent
+import com.salat.statekeeper.domain.entity.LaunchedSplitType
+import com.salat.statekeeper.domain.entity.LaunchedWindowsConfig
 import com.salat.statekeeper.domain.entity.SplitLauncherEvent
 import com.salat.statekeeper.domain.repository.StateKeeperRepository
 import dagger.hilt.android.AndroidEntryPoint
@@ -278,6 +280,8 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
                         event.type,
                         event.darkBackground,
                         event.windowShift,
+                        event.firstCaption,
+                        event.secondCaption
                     )
 
                     is AccessibilityServiceEvent.LaunchLast -> launchLast(event.fromPresetPanel)
@@ -536,11 +540,13 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
     private fun getCurrentSessionId() = stateKeeper.getLaunchedWindows()?.sessionId ?: 0L
 
     private suspend fun closeWindows() {
+        stateKeeper.setClosedSessionId(getCurrentSessionId())
+
         val hasFreePresetWindows = _freePresetWindows.value.isNotEmpty()
         if (hasFreePresetWindows) awaitFreePresetWindows()
 
         when {
-            isAdbConnected() -> adbCloseWindows()
+            adb.ensureConnected() -> adbCloseWindows()
 
             sequentialClosing || hasFreePresetWindows -> sequentiallyCloseWindows()
 
@@ -561,8 +567,6 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
     }
 
     private suspend fun adbCloseWindows() {
-        stateKeeper.setClosedSessionId(getCurrentSessionId())
-
         val (first, second) = _freeFormWindows.value
         val p1 = first?.packageName ?: ""
         val p2 = second?.packageName ?: ""
@@ -573,8 +577,6 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
 
     @Suppress("unused")
     private suspend fun sequentiallyCloseWindows() {
-        stateKeeper.setClosedSessionId(getCurrentSessionId())
-
         val queue = windowsClosingQueue()
         val shownPackages = shownWindows.first().map { it.packageName }
 
@@ -599,8 +601,6 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
     }
 
     private suspend fun parallelCloseWindows() {
-        stateKeeper.setClosedSessionId(getCurrentSessionId())
-
         val queue = windowsClosingQueue()
 
         for (pkg in queue) {
@@ -759,8 +759,13 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
     }
 
     private suspend fun replaceWindow(index: Int, packageName: String, autoPlay: Boolean) {
-        // It's open in the neighboring window
         val currentConfig = stateKeeper.getLaunchedWindows()
+        if (currentConfig?.type == LaunchedSplitType.FREE) {
+            replaceFreeWindow(currentConfig, index, packageName, autoPlay)
+            return
+        }
+
+        // It's open in the neighboring window
         if ((index == 1 && currentConfig?.firstAppPackage == packageName) ||
             (index == 0 && currentConfig?.secondAppPackage == packageName)
         ) {
@@ -791,7 +796,7 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
                     .first() // wait for the first non-null FreeFormWindow
             } ?: return
 
-            if (isAdbConnected()) {
+            if (adb.ensureConnected()) {
                 targetWindow.packageName.takeIf { it.isNotEmpty() && it != "unknown" }?.let { targetPackage ->
                     // adb.forceStop(targetPackage)
                     adb.getTaskId(targetPackage)?.let { taskId -> adb.minimize(taskId) }
@@ -809,6 +814,50 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
             }
         } catch (e: Exception) {
             Timber.e(e)
+        }
+    }
+
+    private suspend fun replaceFreeWindow(
+        config: LaunchedWindowsConfig,
+        index: Int,
+        packageName: String,
+        autoPlay: Boolean
+    ) {
+        val targetPackage = config.freePresetWindowPackages.getOrNull(index) ?: return
+        if (packageName != targetPackage && packageName in config.freeWindowPackages) {
+            withContext(Dispatchers.Main) {
+                toast(getString(R.string.opened_in_adjacent_window))
+            }
+            return
+        }
+
+        stateKeeper.setClosedSessionId(config.sessionId)
+        // The replaced window can be the only window of the preset. Keep the dark screen until the new session settles
+        settledSessionId = 0L
+
+        if (adb.ensureConnected()) {
+            adb.getTaskId(targetPackage)?.let { adb.minimize(it) }
+            delay(150L)
+        } else {
+            closeShownFreeWindow(targetPackage)
+        }
+        onReplaceWindowTask(index, packageName, autoPlay)
+    }
+
+    // The replace menu covers the windows. The window list shows them again after the menu closes
+    private suspend fun closeShownFreeWindow(packageName: String) {
+        val window = withTimeoutOrNull(FREE_WINDOWS_SETTLE_TIMEOUT) {
+            freePresetWindows
+                .map { list -> list.find { it.packageName == packageName } }
+                .filterNotNull()
+                .first()
+        } ?: return
+
+        setFocusWindow(packageName)
+        delay(150L)
+
+        withTimeoutOrNull(AWAIT_TIMEOUT) {
+            suspendCancellableCoroutine<Boolean> { cont -> closeWindow(window) { cont.resume(it) } }
         }
     }
 
@@ -844,7 +893,9 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
         secondAutoPlay: Int,
         type: String,
         darkBackground: Int,
-        windowShift: Int
+        windowShift: Int,
+        firstCaption: Int,
+        secondCaption: Int
     ) {
         stateKeeper.setClosedSessionId(getCurrentSessionId())
 
@@ -870,6 +921,8 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
             putExtra("type", type)
             putExtra("dark_background", darkBackground)
             putExtra("window_shift", windowShift)
+            putExtra("first_caption", firstCaption)
+            putExtra("second_caption", secondCaption)
         }
     }
 

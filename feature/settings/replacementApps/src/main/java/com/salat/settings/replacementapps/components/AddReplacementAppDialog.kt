@@ -3,20 +3,14 @@ package com.salat.settings.replacementapps.components
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -43,7 +37,6 @@ import com.salat.uikit.component.DialogButton
 import com.salat.uikit.component.DialogButtonKind
 import com.salat.uikit.component.DialogButtons
 import com.salat.uikit.component.DialogContainerPadding
-import com.salat.uikit.component.DialogInsetShape
 import com.salat.uikit.component.DialogTextPadding
 import com.salat.uikit.component.DialogTitle
 import com.salat.uikit.component.DialogTopPadding
@@ -68,8 +61,8 @@ fun AddReplacementAppDialog(
         uiScaleState = uiScaleState?.value,
         onDismiss = onDismiss
     ) {
-        var firstWindow by remember { mutableStateOf(false) }
-        var secondWindow by remember { mutableStateOf(false) }
+        var firstWindow by remember { mutableStateOf(true) }
+        var secondWindow by remember { mutableStateOf(true) }
         var autoPlay by remember { mutableStateOf(false) }
 
         Column(modifier = Modifier.padding(top = DialogTopPadding)) {
@@ -99,27 +92,14 @@ fun AddReplacementAppDialog(
 
                 Spacer(Modifier.height(16.dp))
 
-                val firstTitle = stringResource(if (isLandscape) R.string.left_window else R.string.top_window)
-                val secondTitle = stringResource(if (isLandscape) R.string.right_window else R.string.bottom_window)
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = DialogContainerPadding),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    WindowChip(
-                        modifier = Modifier.weight(1f),
-                        title = firstTitle.lowercase(),
-                        checked = firstWindow,
-                        onClick = { firstWindow = !firstWindow }
-                    )
-                    WindowChip(
-                        modifier = Modifier.weight(1f),
-                        title = secondTitle.lowercase(),
-                        checked = secondWindow,
-                        onClick = { secondWindow = !secondWindow }
-                    )
+                WindowTargetSelector(
+                    first = firstWindow,
+                    second = secondWindow,
+                    isLandscape = isLandscape,
+                    modifier = Modifier.padding(horizontal = DialogContainerPadding)
+                ) { first, second ->
+                    firstWindow = first
+                    secondWindow = second
                 }
 
                 val showAutoPlay by remember { derivedStateOf { preSelected?.isMediaApp == true } }
@@ -148,19 +128,13 @@ fun AddReplacementAppDialog(
                         text = stringResource(android.R.string.cancel).capitalizeFirstLetter(),
                         onClick = onCancel
                     )
-                    val enableOk by remember { derivedStateOf { (firstWindow || secondWindow) && preSelected != null } }
+                    val enableOk by remember { derivedStateOf { preSelected != null } }
                     DialogButton(
                         text = stringResource(android.R.string.ok),
                         kind = DialogButtonKind.Accent,
                         enabled = enableOk,
                         onClick = {
                             preSelected?.let {
-                                // No position
-                                if (!firstWindow && !secondWindow) {
-                                    onSelect(null)
-                                    return@let
-                                }
-
                                 onSelect(
                                     SelectedDialogApp(
                                         app = it,
@@ -177,41 +151,6 @@ fun AddReplacementAppDialog(
             }
         }
     }
-}
-
-@Composable
-private fun WindowChip(modifier: Modifier, title: String, checked: Boolean, onClick: () -> Unit) = Row(
-    modifier = modifier
-        .clip(DialogInsetShape)
-        .background(
-            if (checked) {
-                AppTheme.colors.contentAccent.copy(.18f)
-            } else {
-                AppTheme.colors.surfaceLayer1
-            }
-        )
-        .clickable(onClick = onClick)
-        .padding(horizontal = 12.dp, vertical = 14.dp),
-    horizontalArrangement = Arrangement.Center,
-    verticalAlignment = Alignment.CenterVertically
-) {
-    Checkbox(
-        checked = checked,
-        onCheckedChange = null,
-        modifier = Modifier.size(20.dp),
-        colors = CheckboxDefaults.colors(
-            checkedColor = AppTheme.colors.settingsTitleAccent,
-            uncheckedColor = AppTheme.colors.contentPrimary.copy(alpha = .3f),
-            checkmarkColor = AppTheme.colors.surfaceLayer1
-        )
-    )
-    Spacer(Modifier.width(10.dp))
-    Text(
-        text = title,
-        color = if (checked) AppTheme.colors.settingsTitleAccent else AppTheme.colors.contentPrimary,
-        style = AppTheme.typography.radioTitle,
-        maxLines = 2
-    )
 }
 
 @Composable

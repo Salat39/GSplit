@@ -24,6 +24,7 @@ dependencies {
     implementation(project(Modules.CORE_UIKIT))
     implementation(project(Modules.CORE_COIL))
     implementation(project(Modules.CORE_PREFERENCES))
+    implementation(project(Modules.CORE_SPLIT_LAUNCHER))
     implementation(project(Modules.CORE_SPLIT_PRESETS))
     implementation(project(Modules.CORE_SYSTEM_APPS))
 

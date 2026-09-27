@@ -116,7 +116,8 @@ class LaunchHistoryRepositoryImpl(private val dataStore: DataStoreRepository) : 
         return LastLaunchedApp(
             title = this.title,
             packageName = this.packageName,
-            autoPlay = this.autoPlay
+            autoPlay = this.autoPlay,
+            withCaption = this.withCaption
         )
     }
 
@@ -151,7 +152,8 @@ class LaunchHistoryRepositoryImpl(private val dataStore: DataStoreRepository) : 
         return LastLaunchedAppDto(
             title = this.title,
             packageName = this.packageName,
-            autoPlay = this.autoPlay
+            autoPlay = this.autoPlay,
+            withCaption = this.withCaption
         )
     }
 

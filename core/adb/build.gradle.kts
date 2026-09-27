@@ -24,6 +24,8 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel)
     implementation(libs.timber)
     implementation(libs.adb.shell)
+    implementation(libs.shizuku.api)
+    implementation(libs.shizuku.provider)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

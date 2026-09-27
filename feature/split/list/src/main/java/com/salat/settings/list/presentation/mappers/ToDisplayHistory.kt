@@ -36,7 +36,8 @@ internal fun LastLaunchedApp.toDisplay(find: InstalledAppInfo?) = DisplayAppPres
     title = find?.appName ?: title,
     packageName = find?.packageName ?: packageName,
     icon = if (find?.icon is Drawable) find.icon as Drawable else null,
-    autoPlay = autoPlay
+    autoPlay = autoPlay,
+    withCaption = withCaption
 )
 
 internal fun LastLaunchedType.toDisplay() = when (this) {

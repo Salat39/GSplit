@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -60,6 +61,7 @@ import com.salat.ui.rememberPainterResource
 import com.salat.ui.scaledWithLayout
 import com.salat.uikit.theme.AppTheme
 import kotlin.math.roundToInt
+import presentation.toast
 
 private const val HEADER_HEIGHT = 30
 private const val MIN_WINDOW_SIZE = 180
@@ -81,11 +83,18 @@ internal fun FreeWindowFrame(
     otherWindows: List<DisplayFreeWindow>,
     canvasSize: IntSize,
     color: Color,
+    showWindowType: Boolean,
+    isWindowTypeLocked: Boolean,
     onChange: (DisplayFreeWindow) -> Unit,
     onGestureActive: (Boolean) -> Unit,
     onAppClick: () -> Unit,
     onClose: () -> Unit
 ) {
+    val context = LocalContext.current
+    val captionToast = stringResource(R.string.window_type_caption_toast, window.app.appName)
+    val noCaptionToast = stringResource(R.string.window_type_no_caption_toast, window.app.appName)
+    val pinnedHint = stringResource(R.string.window_type_pinned_hint)
+    val adbHint = stringResource(R.string.window_type_adb_hint, stringResource(R.string.adb_features))
     val currentWindow = rememberUpdatedState(window)
     val currentOnChange by rememberUpdatedState(onChange)
     val currentOnGestureActive = rememberUpdatedState(onGestureActive)
@@ -220,6 +229,24 @@ internal fun FreeWindowFrame(
                         val delta = if (edge.isSide) total.x / canvasSize.width else total.y / canvasSize.height
                         currentOnChange(start.resize(edge, delta, currentLimits))
                     }
+                )
+            }
+
+            if (showWindowType) {
+                WindowTypeSwitch(
+                    withCaption = window.alwaysOnTop || window.app.withCaption,
+                    color = color,
+                    variant = WindowTypeSwitchVariant.FRAME,
+                    locked = window.alwaysOnTop,
+                    enabled = !isWindowTypeLocked,
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(HANDLE_INSET.dp),
+                    onChange = { value ->
+                        context.toast(if (value) captionToast else noCaptionToast)
+                        onChange(window.copy(app = window.app.copy(withCaption = value)))
+                    },
+                    onLockedClick = { context.toast(if (isWindowTypeLocked) adbHint else pinnedHint) }
                 )
             }
         }

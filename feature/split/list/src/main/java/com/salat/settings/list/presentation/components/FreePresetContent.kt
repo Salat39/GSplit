@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -41,7 +40,6 @@ import com.salat.settings.list.presentation.entity.DisplayAppPreset
 import com.salat.settings.list.presentation.entity.DisplayFreeWindow
 import com.salat.settings.list.presentation.entity.DisplaySplitPreset
 import com.salat.ui.modifyFontSize
-import com.salat.ui.rememberPainterResource
 import com.salat.ui.systemIconsAreRound
 import com.salat.uikit.component.FreeWindowsMap
 import com.salat.uikit.theme.AppTheme
@@ -53,13 +51,18 @@ private const val CHIP_ICON_SIZE = 18
 private const val CHIP_ICON_INSET = 5
 private const val CHIP_SQUARE_ICON_INSET = 8
 private const val CHIP_TEXT_INSET = 12
+private const val CHIP_TRAILING_ICON_INSET = 10
 private const val CHIP_SPACING = 8
 private const val STATUS_GAP = 6
 private const val CHIP_BACKGROUND_ALPHA = .3f
 private const val CHIP_CONTENT_WHITE_FRACTION = .6f
+private const val CHIP_ICON_GAP_EM = .3f
+private const val PLAY_ICON_EM = .7f
+private const val PIN_ICON_EM = .76f
+private const val CAPTION_GLYPH_EM = .65f
 
 @Composable
-internal fun FreePresetContent(preset: DisplaySplitPreset, modifier: Modifier = Modifier) {
+internal fun FreePresetContent(preset: DisplaySplitPreset, showWindowType: Boolean, modifier: Modifier = Modifier) {
     val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
     val subtitleStyle = AppTheme.typography.dialogSubtitle
@@ -79,7 +82,7 @@ internal fun FreePresetContent(preset: DisplaySplitPreset, modifier: Modifier = 
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(STATUS_GAP.dp)
         ) {
-            WindowChipsRow(preset.windows)
+            WindowChipsRow(preset.windows, showCaptions = showWindowType)
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -102,12 +105,18 @@ internal fun FreePresetContent(preset: DisplaySplitPreset, modifier: Modifier = 
 }
 
 @Composable
-private fun WindowChipsRow(windows: List<DisplayFreeWindow>) = SubcomposeLayout { constraints ->
+private fun WindowChipsRow(windows: List<DisplayFreeWindow>, showCaptions: Boolean) = SubcomposeLayout { constraints ->
     val spacing = CHIP_SPACING.dp.roundToPx()
     val looseConstraints = constraints.copy(minWidth = 0, minHeight = 0)
     val chips = subcompose("chips") {
         windows.forEachIndexed { index, window ->
-            WindowChip(app = window.app, alwaysOnTop = window.alwaysOnTop, color = freeWindowColor(index))
+            WindowChip(
+                app = window.app,
+                alwaysOnTop = window.alwaysOnTop,
+                // A pinned window always opens with the top bar. The pin icon shows this
+                showCaption = showCaptions && window.app.withCaption && !window.alwaysOnTop,
+                color = freeWindowColor(index)
+            )
         }
     }
     val chipHeight = CHIP_HEIGHT.dp.roundToPx()
@@ -154,16 +163,20 @@ private fun MoreChip(count: Int) = Box(
 }
 
 @Composable
-private fun WindowChip(app: DisplayAppPreset, alwaysOnTop: Boolean, color: Color) = Row(
+private fun WindowChip(app: DisplayAppPreset, alwaysOnTop: Boolean, showCaption: Boolean, color: Color) = Row(
     modifier = Modifier
         .height(CHIP_HEIGHT.dp)
         .clip(CircleShape)
         .background(color.copy(CHIP_BACKGROUND_ALPHA))
-        .padding(start = chipStartInset(hasIcon = app.icon != null), end = 12.dp),
+        .padding(
+            start = chipStartInset(hasIcon = app.icon != null),
+            end = chipEndInset(hasIcon = app.autoPlay == true || alwaysOnTop || showCaption)
+        ),
     verticalAlignment = Alignment.CenterVertically
 ) {
     val context = LocalContext.current
     val contentColor = lerp(color, Color.White, CHIP_CONTENT_WHITE_FRACTION)
+    val titleStyle = AppTheme.typography.sourceType.modifyFontSize(1)
     app.icon?.let { icon ->
         AsyncImage(
             model = remember(icon) { ImageRequest.Builder(context).data(icon).build() },
@@ -178,30 +191,27 @@ private fun WindowChip(app: DisplayAppPreset, alwaysOnTop: Boolean, color: Color
     Text(
         text = app.title,
         modifier = Modifier.weight(1f, fill = false),
-        style = AppTheme.typography.sourceType.modifyFontSize(1),
+        style = titleStyle,
         color = contentColor,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis
     )
+    val iconGap = titleStyle.emToDp(CHIP_ICON_GAP_EM)
     if (app.autoPlay == true) {
-        Spacer(Modifier.width(4.dp))
-        Icon(
-            painter = rememberPainterResource(R.drawable.ic_play),
-            contentDescription = null,
-            tint = contentColor,
-            modifier = Modifier.size(10.dp)
-        )
+        Spacer(Modifier.width(iconGap))
+        TextAlignedIcon(R.drawable.ic_play, titleStyle, contentColor, widthEm = PLAY_ICON_EM, heightEm = PLAY_ICON_EM)
     }
     if (alwaysOnTop) {
-        Spacer(Modifier.width(4.dp))
-        Icon(
-            painter = rememberPainterResource(R.drawable.ic_pin),
-            contentDescription = null,
-            tint = contentColor,
-            modifier = Modifier.size(10.dp)
-        )
+        Spacer(Modifier.width(iconGap))
+        TextAlignedIcon(R.drawable.ic_pin, titleStyle, contentColor, widthEm = PIN_ICON_EM, heightEm = PIN_ICON_EM)
+    }
+    if (showCaption) {
+        Spacer(Modifier.width(iconGap))
+        WindowCaptionGlyph(textStyle = titleStyle, tint = contentColor, heightEm = CAPTION_GLYPH_EM)
     }
 }
+
+private fun chipEndInset(hasIcon: Boolean) = if (hasIcon) CHIP_TRAILING_ICON_INSET.dp else CHIP_TEXT_INSET.dp
 
 // A square icon needs more start space because its corners come close to the round chip edge
 private fun chipStartInset(hasIcon: Boolean) = when {

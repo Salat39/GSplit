@@ -129,18 +129,22 @@ class PresetLauncherViewModel @Inject constructor(
         secondAutoPlay: Int,
         type: String,
         darkBackground: Int,
-        windowShift: Int
+        windowShift: Int,
+        firstCaption: Int,
+        secondCaption: Int
     ) = viewModelScope.launch(Dispatchers.IO) {
         try {
             val firstApp = SplitLaunchApp(
                 title = firstPackage,
                 packageName = firstPackage,
-                autoPlay = firstAutoPlay == 1
+                autoPlay = firstAutoPlay == 1,
+                withCaption = firstCaption == 1
             )
             val secondApp = SplitLaunchApp(
                 title = secondPackage,
                 packageName = secondPackage,
-                autoPlay = secondAutoPlay == 1
+                autoPlay = secondAutoPlay == 1,
+                withCaption = secondCaption == 1
             )
             val splitType = when (type) {
                 "1x2" -> SplitLaunchType.ONE_TO_THREE
@@ -184,41 +188,52 @@ class PresetLauncherViewModel @Inject constructor(
         }
     }
 
-    internal fun launchFreeWindow(packageName: String, bounds: FloatArray, autoPlay: Boolean, pin: Boolean) =
-        viewModelScope.launch(Dispatchers.IO) {
-            val (left, top, right, bottom) = bounds
-            val window = SplitLaunchWindow(
-                app = SplitLaunchApp(title = packageName, packageName = packageName, autoPlay = autoPlay),
-                left = left,
-                top = top,
-                right = right,
-                bottom = bottom,
-                alwaysOnTop = pin
-            )
-            val task = SplitLaunchTask(
-                firstApp = null,
-                type = SplitLaunchType.FREE,
-                secondApp = null,
-                autoStart = false,
-                darkBackground = false,
-                bottomWindowShift = false,
-                id = 0L,
-                windows = listOf(window)
-            )
+    internal fun launchFreeWindow(
+        packageName: String,
+        bounds: FloatArray,
+        autoPlay: Boolean,
+        pin: Boolean,
+        withCaption: Boolean
+    ) = viewModelScope.launch(Dispatchers.IO) {
+        val (left, top, right, bottom) = bounds
+        val window = SplitLaunchWindow(
+            app = SplitLaunchApp(
+                title = packageName,
+                packageName = packageName,
+                autoPlay = autoPlay,
+                withCaption = withCaption
+            ),
+            left = left,
+            top = top,
+            right = right,
+            bottom = bottom,
+            alwaysOnTop = pin
+        )
+        val task = SplitLaunchTask(
+            firstApp = null,
+            type = SplitLaunchType.FREE,
+            secondApp = null,
+            autoStart = false,
+            darkBackground = false,
+            bottomWindowShift = false,
+            id = 0L,
+            windows = listOf(window)
+        )
 
-            launchSplitUseCase.execute(task, SplitLaunchSource.SHORTCUT)
+        launchSplitUseCase.execute(task, SplitLaunchSource.SHORTCUT)
 
-            // disable split autorun on application startup
-            setSkipAutoLaunchUseCase.execute(true)
+        // disable split autorun on application startup
+        setSkipAutoLaunchUseCase.execute(true)
 
-            _finishState.send(Unit)
-        }
+        _finishState.send(Unit)
+    }
 
     private fun LastLaunchedApp.toSplitLaunchApp(): SplitLaunchApp {
         return SplitLaunchApp(
             title = this.title,
             packageName = this.packageName,
-            autoPlay = this.autoPlay
+            autoPlay = this.autoPlay,
+            withCaption = this.withCaption
         )
     }
 

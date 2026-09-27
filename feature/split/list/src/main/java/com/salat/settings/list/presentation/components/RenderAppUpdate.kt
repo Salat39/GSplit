@@ -56,7 +56,8 @@ private val UpdateIconTextGap = 12.dp
 internal fun RenderAppUpdate(
     info: DisplayAppUpdate,
     updateDownloadState: UiDownloadState?,
-    onStartDownload: (String) -> Unit
+    onStartDownload: (String) -> Unit,
+    onSkip: () -> Unit
 ) {
     Spacer(Modifier.height(8.dp))
 
@@ -92,7 +93,7 @@ internal fun RenderAppUpdate(
                 )
             }
             Spacer(Modifier.width(UpdateIconTextGap))
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(R.string.new_version_available),
                     color = AppTheme.colors.contentPrimary,
@@ -106,6 +107,21 @@ internal fun RenderAppUpdate(
                         style = AppTheme.typography.dialogSubtitle
                     )
                 }
+            }
+            if (!info.mandatory) {
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = stringResource(R.string.skip),
+                    modifier = Modifier
+                        .heightIn(min = 40.dp)
+                        .clip(RoundedCornerShape(14.dp))
+                        .clickable(onClick = onSkip)
+                        .wrapContentHeight()
+                        .padding(horizontal = 12.dp),
+                    color = AppTheme.colors.contentPrimary.copy(.5f),
+                    style = AppTheme.typography.cardFormatTitle,
+                    maxLines = 1
+                )
             }
         }
 
