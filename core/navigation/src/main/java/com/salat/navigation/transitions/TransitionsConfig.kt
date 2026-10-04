@@ -13,6 +13,7 @@ import com.salat.settings.darkScreenMode.presentation.route.SETTINGS_DARK_SCREEN
 import com.salat.settings.general.presentation.route.SETTINGS_GENERAL_NAV_ROUTE_NAME
 import com.salat.settings.list.presentation.route.SPLIT_LIST_NAV_ROUTE_NAME
 import com.salat.settings.presets.presentation.route.SETTINGS_PRESETS_NAV_ROUTE_NAME
+import com.salat.settings.quicksplit.presentation.route.SETTINGS_QUICK_SPLIT_NAV_ROUTE_NAME
 import com.salat.settings.replacementapps.route.SETTINGS_REPLACEMENT_APPS_NAV_ROUTE_NAME
 import com.salat.settings.scheduler.presentation.route.SETTINGS_SCHEDULER_NAV_ROUTE_NAME
 import com.salat.settings.ui.route.SETTINGS_UI_NAV_ROUTE_NAME
@@ -98,6 +99,18 @@ val transitionsMap: Map<TransitionKey, TransitionRule> = listOf(
     TransitionRule(
         enter = SETTINGS_GENERAL_NAV_ROUTE_NAME,
         exit = SETTINGS_API_NAV_ROUTE_NAME,
+        invert = false,
+        type = TransitionType.DELAYED_SLIDE
+    ),
+    TransitionRule(
+        enter = SETTINGS_GENERAL_NAV_ROUTE_NAME,
+        exit = SETTINGS_QUICK_SPLIT_NAV_ROUTE_NAME,
+        invert = false,
+        type = TransitionType.DELAYED_SLIDE
+    ),
+    TransitionRule(
+        enter = SETTINGS_QUICK_SPLIT_NAV_ROUTE_NAME,
+        exit = SPLIT_ADD_NAV_ROUTE_NAME,
         invert = false,
         type = TransitionType.DELAYED_SLIDE
     ),

@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,10 +28,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Icon
@@ -47,16 +49,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.painter.Painter
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -70,10 +73,13 @@ import com.salat.resources.R
 import com.salat.settings.add.presentation.components.AppSelectDialog
 import com.salat.settings.add.presentation.components.DrawableImage
 import com.salat.settings.add.presentation.components.FreeModeEditor
-import com.salat.settings.add.presentation.components.ManualRatioHandle
+import com.salat.settings.add.presentation.components.MainWindowGlyph
+import com.salat.settings.add.presentation.components.PaneLabelMatchingTextPadding
 import com.salat.settings.add.presentation.components.RenderToolbar
 import com.salat.settings.add.presentation.components.WindowTypeSwitch
 import com.salat.settings.add.presentation.components.WindowTypeSwitchVariant
+import com.salat.settings.add.presentation.components.centerGlyphsVertically
+import com.salat.settings.add.presentation.components.rememberGlyphHeightAboveBaselinePx
 import com.salat.settings.add.presentation.entity.DeviceAppInfo
 import com.salat.settings.add.presentation.entity.SizeFormat
 import com.salat.settings.add.presentation.entity.presetFormatOf
@@ -82,8 +88,10 @@ import com.salat.ui.clickableNoRipple
 import com.salat.ui.rememberIsLandscape
 import com.salat.ui.rememberPainterResource
 import com.salat.ui.scaledWithLayout
+import com.salat.uikit.component.AdaptivePaneContent
+import com.salat.uikit.component.EmptyPaneContent
+import com.salat.uikit.component.ManualRatioHandle
 import com.salat.uikit.component.RatioGlyph
-import com.salat.uikit.component.SettingsDefaults
 import com.salat.uikit.component.TopShadow
 import com.salat.uikit.preview.PreviewScreen
 import com.salat.uikit.theme.AppTheme
@@ -114,6 +122,8 @@ private val OptionsSpacing = 6.dp
 private val SwapButtonSize = 40.dp
 private const val PANE_BADGE_ALPHA = .24f
 private const val PANE_BADGE_TEXT_ALPHA = .85f
+private const val MAIN_WINDOW_CAPTION_ALPHA = .78f
+private const val MAIN_WINDOW_CAPTION_FADE_DURATION = 200
 
 @Composable
 internal fun AddScreen(
@@ -127,9 +137,13 @@ internal fun AddScreen(
     val showSecondSelectDialog = remember { mutableStateOf(false) }
 
     if (showFirstSelectDialog.value) {
+        val bottomPackage = state.bottomApp?.packageName
+        val topSlotApps = remember(state.deviceApps, bottomPackage) {
+            state.deviceApps.filter { it.packageName != bottomPackage }
+        }
         AppSelectDialog(
             selected = state.topApp,
-            list = state.deviceApps,
+            list = topSlotApps,
             uiScaleState = uiScaleState,
             onDismiss = { showFirstSelectDialog.value = false },
             onCancel = { showFirstSelectDialog.value = false },
@@ -138,9 +152,13 @@ internal fun AddScreen(
     }
 
     if (showSecondSelectDialog.value) {
+        val topPackage = state.topApp?.packageName
+        val bottomSlotApps = remember(state.deviceApps, topPackage) {
+            state.deviceApps.filter { it.packageName != topPackage }
+        }
         AppSelectDialog(
             selected = state.bottomApp,
-            list = state.deviceApps,
+            list = bottomSlotApps,
             uiScaleState = uiScaleState,
             onDismiss = { showSecondSelectDialog.value = false },
             onCancel = { showSecondSelectDialog.value = false },
@@ -166,6 +184,7 @@ internal fun AddScreen(
             deviceApps = state.deviceApps,
             showWindowType = state.isWindowTypeEnabled,
             isWindowTypeLocked = !state.isWindowTypeAvailable,
+            showMainWindow = state.isMainWindowAvailable,
             uiScaleState = uiScaleState,
             sendAction = sendAction,
             onBack = onFreeModeBack,
@@ -183,12 +202,21 @@ internal fun AddScreen(
             .background(AppTheme.colors.surfaceBackground)
             .padding(innerPadding)
     ) {
-        val showApply = remember(state.topApp, state.bottomApp) {
-            derivedStateOf { state.topApp != null && state.bottomApp != null }
+        val showApply = remember(state.topApp, state.bottomApp, state.quickSplit) {
+            derivedStateOf { state.quickSplit || (state.topApp != null && state.bottomApp != null) }
         }
+        val toolbarTitle = stringResource(
+            when {
+                state.quickSplit -> R.string.quick_split_default_ratio_editor
+                state.editId != null -> R.string.editing_a_preset
+                else -> R.string.creating_a_preset
+            }
+        )
 
-        RenderToolbar(state.editId != null, onNavigateBack, showApply = showApply) {
-            sendAction(AddViewModel.Action.CommitPreset)
+        RenderToolbar(toolbarTitle, onNavigateBack, showApply = showApply) {
+            sendAction(
+                if (state.quickSplit) AddViewModel.Action.CommitQuickSplit else AddViewModel.Action.CommitPreset
+            )
         }
         var panesSize by remember { mutableStateOf(IntSize.Zero) }
         var bandSize by remember { mutableStateOf(IntSize.Zero) }
@@ -215,6 +243,8 @@ internal fun AddScreen(
             }
             val ratioPerPx = 1f / windowsLength.coerceAtLeast(1)
             val matchedPreset = presetFormatOf(state.customRatio)?.label()
+            val showMainWindow = state.isMainWindowAvailable && !state.isNativeSplitEnabled && !state.quickSplit
+            val isWindowTypeShown = state.isWindowTypeEnabled && !state.isNativeSplitEnabled
 
             val firstPane: @Composable (Modifier) -> Unit = { paneModifier ->
                 AppPane(
@@ -224,12 +254,27 @@ internal fun AddScreen(
                     app = state.topApp,
                     isFirst = true,
                     isLandscape = isLandscape,
-                    showWindowType = state.isWindowTypeEnabled && !state.isNativeSplitEnabled && state.topApp != null,
+                    showWindowType = isWindowTypeShown && (state.quickSplit || state.topApp != null),
                     isWindowTypeLocked = !state.isWindowTypeAvailable,
-                    withCaption = state.topApp?.withCaption ?: false,
-                    onClick = { showFirstSelectDialog.value = true },
+                    withCaption = if (state.quickSplit) {
+                        state.quickSplitFirstCaption
+                    } else state.topApp?.withCaption ?: false,
+                    showMainWindow = showMainWindow,
+                    quickSplitNewWindow = state.quickSplitInsertFirst.takeIf { state.quickSplit },
+                    onClick = {
+                        if (state.quickSplit) {
+                            sendAction(AddViewModel.Action.SetQuickSplitInsertFirst(true))
+                        } else showFirstSelectDialog.value = true
+                    },
                     onToggleAutoPlay = { sendAction(AddViewModel.Action.ToggleTopAutoPlay) },
-                    onWindowTypeChange = { sendAction(AddViewModel.Action.SetTopWithCaption(it)) }
+                    onToggleMainWindow = { sendAction(AddViewModel.Action.ToggleTopMainWindow) },
+                    onWindowTypeChange = {
+                        sendAction(
+                            if (state.quickSplit) {
+                                AddViewModel.Action.SetQuickSplitCaption(isFirst = true, value = it)
+                            } else AddViewModel.Action.SetTopWithCaption(it)
+                        )
+                    }
                 )
             }
             val secondPane: @Composable (Modifier) -> Unit = { paneModifier ->
@@ -240,13 +285,27 @@ internal fun AddScreen(
                     app = state.bottomApp,
                     isFirst = false,
                     isLandscape = isLandscape,
-                    showWindowType = state.isWindowTypeEnabled &&
-                        !state.isNativeSplitEnabled && state.bottomApp != null,
+                    showWindowType = isWindowTypeShown && (state.quickSplit || state.bottomApp != null),
                     isWindowTypeLocked = !state.isWindowTypeAvailable,
-                    withCaption = state.bottomApp?.withCaption ?: false,
-                    onClick = { showSecondSelectDialog.value = true },
+                    withCaption = if (state.quickSplit) {
+                        state.quickSplitSecondCaption
+                    } else state.bottomApp?.withCaption ?: false,
+                    showMainWindow = showMainWindow,
+                    quickSplitNewWindow = (!state.quickSplitInsertFirst).takeIf { state.quickSplit },
+                    onClick = {
+                        if (state.quickSplit) {
+                            sendAction(AddViewModel.Action.SetQuickSplitInsertFirst(false))
+                        } else showSecondSelectDialog.value = true
+                    },
                     onToggleAutoPlay = { sendAction(AddViewModel.Action.ToggleBottomAutoPlay) },
-                    onWindowTypeChange = { sendAction(AddViewModel.Action.SetBottomWithCaption(it)) }
+                    onToggleMainWindow = { sendAction(AddViewModel.Action.ToggleBottomMainWindow) },
+                    onWindowTypeChange = {
+                        sendAction(
+                            if (state.quickSplit) {
+                                AddViewModel.Action.SetQuickSplitCaption(isFirst = false, value = it)
+                            } else AddViewModel.Action.SetBottomWithCaption(it)
+                        )
+                    }
                 )
             }
             val band: @Composable () -> Unit = {
@@ -325,9 +384,12 @@ private fun AppPane(
     showWindowType: Boolean,
     isWindowTypeLocked: Boolean,
     withCaption: Boolean,
+    showMainWindow: Boolean,
     onClick: () -> Unit,
     onToggleAutoPlay: () -> Unit,
-    onWindowTypeChange: (Boolean) -> Unit
+    onToggleMainWindow: () -> Unit,
+    onWindowTypeChange: (Boolean) -> Unit,
+    quickSplitNewWindow: Boolean? = null
 ) {
     val accent = windowAccent(isFirst)
     // The label stays in the outer corner because the options card covers the seam side
@@ -336,9 +398,20 @@ private fun AppPane(
     val isSwitchInLabelRow = showWindowType && !isLandscape
     val isSwitchInBottomCorner = showWindowType && isLandscape
     val context = LocalContext.current
-    val captionToast = app?.let { stringResource(R.string.window_type_caption_toast, it.appName) }.orEmpty()
-    val noCaptionToast = app?.let { stringResource(R.string.window_type_no_caption_toast, it.appName) }.orEmpty()
+    val windowName = app?.appName ?: label
+    val captionToast = stringResource(R.string.window_type_caption_toast, windowName)
+    val noCaptionToast = stringResource(R.string.window_type_no_caption_toast, windowName)
     val adbHint = stringResource(R.string.window_type_adb_hint, stringResource(R.string.adb_features))
+    val mainWindowToast = app?.let { stringResource(R.string.main_window_toast, it.appName) }.orEmpty()
+    val mainWindowToggle = MainWindowToggle(
+        isShown = showMainWindow,
+        isLandscape = isLandscape,
+        isFirst = isFirst,
+        onToggle = {
+            if (app?.mainWindow == false) context.toast(mainWindowToast)
+            onToggleMainWindow()
+        }
+    )
 
     BoxWithConstraints(
         modifier = modifier
@@ -386,19 +459,25 @@ private fun AppPane(
                 ),
             contentAlignment = Alignment.Center
         ) {
-            if (app == null) {
+            if (quickSplitNewWindow != null) {
                 AdaptivePaneContent(
-                    regular = { EmptyPaneContent(isCompact = false) },
-                    compact = { EmptyPaneContent(isCompact = true) }
+                    regular = { QuickSplitPaneContent(quickSplitNewWindow, isCompact = false) },
+                    compact = { QuickSplitPaneContent(quickSplitNewWindow, isCompact = true) }
+                )
+            } else if (app == null) {
+                val title = stringResource(R.string.choose_app)
+                val subtitle = stringResource(R.string.tap_to_choose)
+                AdaptivePaneContent(
+                    regular = { EmptyPaneContent(isCompact = false, title = title, subtitle = subtitle) },
+                    compact = { EmptyPaneContent(isCompact = true, title = title, subtitle = subtitle) }
                 )
             } else {
+                val content: @Composable (Boolean) -> Unit = { isCompact ->
+                    AppPaneContent(app, accent, isCompact, badgeTextStyle, mainWindowToggle, onToggleAutoPlay)
+                }
                 AdaptivePaneContent(
-                    regular = {
-                        AppPaneContent(app, accent, isCompact = false, badgeTextStyle, onToggleAutoPlay)
-                    },
-                    compact = {
-                        AppPaneContent(app, accent, isCompact = true, badgeTextStyle, onToggleAutoPlay)
-                    }
+                    regular = { content(false) },
+                    compact = { content(true) }
                 )
             }
         }
@@ -469,28 +548,6 @@ private fun AdaptivePaneRow(
     }
 }
 
-// Shows the regular content when it fits the pane height. Otherwise it shows the compact row
-@Composable
-private fun AdaptivePaneContent(regular: @Composable () -> Unit, compact: @Composable () -> Unit) = Layout(
-    contents = listOf(regular, compact)
-) { (regularMeasurables, compactMeasurables), constraints ->
-    val contentConstraints = constraints.copy(minWidth = 0, minHeight = 0, maxHeight = Constraints.Infinity)
-    val regularPlaceables = regularMeasurables.map { it.measure(contentConstraints) }
-    val regularHeight = regularPlaceables.maxOfOrNull { it.height } ?: 0
-    val placeables = if (regularHeight <= constraints.maxHeight) {
-        regularPlaceables
-    } else {
-        compactMeasurables.map { it.measure(contentConstraints) }
-    }
-    val contentWidth = placeables.maxOfOrNull { it.width } ?: 0
-    val contentHeight = placeables.maxOfOrNull { it.height } ?: 0
-    val width = contentWidth.coerceIn(constraints.minWidth, constraints.maxWidth)
-    val height = contentHeight.coerceIn(constraints.minHeight, constraints.maxHeight)
-    layout(width, height) {
-        placeables.forEach { it.place((width - it.width) / 2, (height - it.height) / 2) }
-    }
-}
-
 @Composable
 private fun PaneLabel(number: Int, label: String, accent: Color, textStyle: TextStyle, modifier: Modifier = Modifier) =
     Row(
@@ -508,10 +565,18 @@ private fun PaneLabel(number: Int, label: String, accent: Color, textStyle: Text
                 .background(accent),
             contentAlignment = Alignment.Center
         ) {
+            val numberText = number.toString()
             Text(
-                text = number.toString(),
+                text = numberText,
                 style = AppTheme.typography.toggleChip,
-                color = AppTheme.colors.surfaceBackground
+                color = AppTheme.colors.surfaceBackground,
+                modifier = Modifier.centerGlyphsVertically(
+                    glyphHeightAboveBaselinePx = rememberGlyphHeightAboveBaselinePx(
+                        numberText,
+                        AppTheme.typography.toggleChip
+                    ),
+                    verticalPadding = 0.dp
+                )
             )
         }
         Text(
@@ -523,81 +588,70 @@ private fun PaneLabel(number: Int, label: String, accent: Color, textStyle: Text
         )
     }
 
+// The quick split window that keeps the open app or gets the new app
 @Composable
-private fun EmptyPaneContent(isCompact: Boolean) {
-    if (isCompact) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            DashedAddCircle(size = 56.dp)
-            EmptyPaneTexts(alignment = Alignment.Start, textAlign = TextAlign.Start)
-        }
-    } else {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            DashedAddCircle(size = 76.dp)
-            Spacer(Modifier.height(14.dp))
-            EmptyPaneTexts(alignment = Alignment.CenterHorizontally, textAlign = TextAlign.Center)
-        }
-    }
+private fun QuickSplitPaneContent(isNewWindow: Boolean, isCompact: Boolean) = if (isNewWindow) {
+    EmptyPaneContent(
+        isCompact = isCompact,
+        title = stringResource(R.string.quick_split_new_window),
+        subtitle = stringResource(R.string.quick_split_new_window_hint)
+    )
+} else {
+    EmptyPaneContent(
+        isCompact = isCompact,
+        title = stringResource(R.string.quick_split_open_app),
+        subtitle = stringResource(R.string.quick_split_open_app_hint),
+        badge = { size -> OpenAppTile(size = size) }
+    )
 }
 
 @Composable
-private fun EmptyPaneTexts(alignment: Alignment.Horizontal, textAlign: TextAlign) = Column(
-    horizontalAlignment = alignment
+private fun OpenAppTile(size: Dp) = Box(
+    modifier = Modifier
+        .padding(2.dp)
+        .size(size - 4.dp)
+        .clip(RoundedCornerShape(size / 4))
+        .background(Color.Black.copy(PANE_BADGE_ALPHA)),
+    contentAlignment = Alignment.Center
 ) {
-    Text(
-        text = stringResource(R.string.choose_app),
-        style = AppTheme.typography.buttonTitle,
-        color = AppTheme.colors.contentPrimary,
-        textAlign = textAlign
-    )
-    Spacer(Modifier.height(4.dp))
-    Text(
-        text = stringResource(R.string.tap_to_choose),
-        style = AppTheme.typography.aboutText,
-        color = AppTheme.colors.contentPrimary.copy(SettingsDefaults.SUBTITLE_ALPHA),
-        textAlign = textAlign
+    Icon(
+        painter = rememberPainterResource(R.drawable.ic_window_caption),
+        contentDescription = null,
+        tint = AppTheme.colors.contentPrimary.copy(PANE_BADGE_TEXT_ALPHA),
+        modifier = Modifier.size(width = size / 2, height = size * 4 / 9)
     )
 }
 
-@Composable
-private fun DashedAddCircle(size: Dp) {
-    val strokeColor = AppTheme.colors.contentPrimary.copy(.4f)
-    Box(
-        modifier = Modifier
-            .size(size)
-            .drawBehind {
-                val strokeWidth = 2.dp.toPx()
-                drawCircle(
-                    color = strokeColor,
-                    radius = (this.size.minDimension - strokeWidth) / 2,
-                    style = Stroke(
-                        width = strokeWidth,
-                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(6.dp.toPx(), 5.dp.toPx()))
-                    )
-                )
-            },
-        contentAlignment = Alignment.Center
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Add,
-            contentDescription = null,
-            tint = AppTheme.colors.contentPrimary.copy(PANE_BADGE_TEXT_ALPHA),
-            modifier = Modifier.size(size * .42f)
-        )
-    }
-}
+private data class MainWindowToggle(
+    val isShown: Boolean,
+    val isLandscape: Boolean,
+    val isFirst: Boolean,
+    val onToggle: () -> Unit
+)
 
 @Composable
 private fun AppPaneContent(
     app: DeviceAppInfo,
     accent: Color,
     isCompact: Boolean,
-    autoPlayTextStyle: TextStyle,
+    chipTextStyle: TextStyle,
+    mainWindowToggle: MainWindowToggle,
     onToggleAutoPlay: () -> Unit
 ) {
     val autoPlay = app.autoPlay.takeIf { app.isMediaApp }
+    val mainWindow = app.mainWindow.takeIf { mainWindowToggle.isShown }
+    val chips: @Composable () -> Unit = {
+        PaneChips(
+            autoPlay = autoPlay,
+            mainWindow = mainWindow,
+            accent = accent,
+            textStyle = chipTextStyle,
+            isCentered = !isCompact,
+            onToggleAutoPlay = onToggleAutoPlay,
+            onToggleMainWindow = mainWindowToggle.onToggle
+        )
+    }
+    val hasChips = autoPlay != null || mainWindow != null
     if (isCompact) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
@@ -605,15 +659,10 @@ private fun AppPaneContent(
         ) {
             PaneAppIcon(app = app, size = 56.dp)
             Column(modifier = Modifier.weight(1f, fill = false)) {
-                PaneAppTexts(app = app, textAlign = TextAlign.Start)
-                autoPlay?.let { checked ->
+                PaneAppTexts(app, TextAlign.Start, accent, mainWindowToggle)
+                if (hasChips) {
                     Spacer(Modifier.height(8.dp))
-                    AutoPlayToggle(
-                        checked = checked,
-                        accent = accent,
-                        textStyle = autoPlayTextStyle,
-                        onToggle = onToggleAutoPlay
-                    )
+                    chips()
                 }
             }
         }
@@ -621,15 +670,10 @@ private fun AppPaneContent(
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             PaneAppIcon(app = app, size = 72.dp)
             Spacer(Modifier.height(14.dp))
-            PaneAppTexts(app = app, textAlign = TextAlign.Center)
-            autoPlay?.let { checked ->
+            PaneAppTexts(app, TextAlign.Center, accent, mainWindowToggle)
+            if (hasChips) {
                 Spacer(Modifier.height(16.dp))
-                AutoPlayToggle(
-                    checked = checked,
-                    accent = accent,
-                    textStyle = autoPlayTextStyle,
-                    onToggle = onToggleAutoPlay
-                )
+                chips()
             }
         }
     }
@@ -644,7 +688,7 @@ private fun PaneAppIcon(app: DeviceAppInfo, size: Dp) = DrawableImage(
 )
 
 @Composable
-private fun PaneAppTexts(app: DeviceAppInfo, textAlign: TextAlign) {
+private fun PaneAppTexts(app: DeviceAppInfo, textAlign: TextAlign, accent: Color, mainWindowToggle: MainWindowToggle) {
     Text(
         text = app.appName,
         style = AppTheme.typography.statusTitle,
@@ -654,41 +698,155 @@ private fun PaneAppTexts(app: DeviceAppInfo, textAlign: TextAlign) {
         maxLines = 1
     )
     Spacer(Modifier.height(2.dp))
-    Text(
-        text = app.packageName,
-        style = AppTheme.typography.dialogSubtitle,
-        color = AppTheme.colors.contentPrimary.copy(.45f),
-        textAlign = textAlign,
-        overflow = TextOverflow.Ellipsis,
-        maxLines = 1
+    val captionProgress = animateFloatAsState(
+        targetValue = if (mainWindowToggle.isShown && app.mainWindow) 1f else 0f,
+        animationSpec = tween(MAIN_WINDOW_CAPTION_FADE_DURATION),
+        label = "mainWindowCaption"
+    )
+    SharedLineSlot(
+        isCentered = textAlign == TextAlign.Center,
+        progress = captionProgress,
+        first = {
+            Text(
+                text = app.packageName,
+                style = AppTheme.typography.dialogSubtitle,
+                color = AppTheme.colors.contentPrimary.copy(.45f),
+                textAlign = textAlign,
+                overflow = TextOverflow.Ellipsis,
+                maxLines = 1
+            )
+        },
+        second = {
+            if (mainWindowToggle.isShown) {
+                MainWindowCaption(mainWindowToggle.isLandscape, mainWindowToggle.isFirst, accent)
+            }
+        }
     )
 }
 
+// Both lines take the same place, so a switch between them moves nothing. The second line shows only if it fits
 @Composable
-private fun AutoPlayToggle(checked: Boolean, accent: Color, textStyle: TextStyle, onToggle: () -> Unit) {
+private fun SharedLineSlot(
+    isCentered: Boolean,
+    progress: State<Float>,
+    first: @Composable () -> Unit,
+    second: @Composable () -> Unit
+) = Layout(contents = listOf(first, second)) { (firstMeasurables, secondMeasurables), constraints ->
+    val itemConstraints = constraints.copy(minWidth = 0, minHeight = 0)
+    val firstPlaceable = firstMeasurables.first().measure(itemConstraints)
+    val secondPlaceable = secondMeasurables.firstOrNull()
+        ?.takeIf { it.maxIntrinsicWidth(Constraints.Infinity) <= constraints.maxWidth }
+        ?.measure(itemConstraints)
+    val width = maxOf(firstPlaceable.width, secondPlaceable?.width ?: 0)
+        .coerceIn(constraints.minWidth, constraints.maxWidth)
+    val height = maxOf(firstPlaceable.height, secondPlaceable?.height ?: 0)
+
+    layout(width, height) {
+        fun Placeable.placeInSlot(alpha: () -> Float) = placeWithLayer(
+            x = if (isCentered) (width - this.width) / 2 else 0,
+            y = (height - this.height) / 2
+        ) { this.alpha = alpha() }
+
+        firstPlaceable.placeInSlot { if (secondPlaceable == null) 1f else 1f - progress.value }
+        secondPlaceable?.placeInSlot { progress.value }
+    }
+}
+
+@Composable
+private fun MainWindowCaption(isLandscape: Boolean, isFirst: Boolean, accent: Color) {
+    val color = AppTheme.colors.contentPrimary.copy(MAIN_WINDOW_CAPTION_ALPHA)
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        MainWindowGlyph(isLandscape = isLandscape, isFirst = isFirst, color = color, accent = accent)
+        Text(
+            text = stringResource(R.string.main_window_caption),
+            style = AppTheme.typography.dialogSubtitle,
+            color = color,
+            maxLines = 1,
+            softWrap = false
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PaneChips(
+    autoPlay: Boolean?,
+    mainWindow: Boolean?,
+    accent: Color,
+    textStyle: TextStyle,
+    isCentered: Boolean,
+    onToggleAutoPlay: () -> Unit,
+    onToggleMainWindow: () -> Unit
+) = FlowRow(
+    horizontalArrangement = Arrangement.spacedBy(
+        space = 8.dp,
+        alignment = if (isCentered) Alignment.CenterHorizontally else Alignment.Start
+    ),
+    verticalArrangement = Arrangement.spacedBy(8.dp)
+) {
+    autoPlay?.let { checked ->
+        PaneChip(
+            checked = checked,
+            icon = rememberVectorPainter(if (checked) Icons.Filled.Check else Icons.Filled.PlayArrow),
+            text = stringResource(R.string.autoplay_chip),
+            accent = accent,
+            textStyle = textStyle,
+            onToggle = onToggleAutoPlay
+        )
+    }
+    mainWindow?.let { checked ->
+        PaneChip(
+            checked = checked,
+            icon = rememberPainterResource(R.drawable.ic_crown),
+            text = stringResource(R.string.main_window_short),
+            accent = accent,
+            textStyle = textStyle,
+            onToggle = onToggleMainWindow
+        )
+    }
+}
+
+@Composable
+private fun PaneChip(
+    checked: Boolean,
+    icon: Painter,
+    text: String,
+    accent: Color,
+    textStyle: TextStyle,
+    onToggle: () -> Unit
+) {
     val contentColor = if (checked) accent else AppTheme.colors.contentPrimary.copy(PANE_BADGE_TEXT_ALPHA)
+    // The same metrics as the window type switch next to it
     Row(
         modifier = Modifier
-            .heightIn(min = 40.dp)
-            .clip(RoundedCornerShape(20.dp))
+            .clip(CircleShape)
             .background(if (checked) accent.copy(.22f) else Color.Black.copy(PANE_BADGE_ALPHA))
-            .clickable(onClick = onToggle)
-            .padding(start = 12.dp, end = 16.dp, top = 6.dp, bottom = 6.dp),
+            .toggleable(value = checked, role = Role.Switch, onValueChange = { onToggle() })
+            .padding(2.dp)
+            .heightIn(min = 28.dp)
+            .padding(start = 9.dp, end = 11.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Icon(
-            imageVector = if (checked) Icons.Filled.Check else Icons.Filled.PlayArrow,
+            painter = icon,
             contentDescription = null,
             tint = contentColor,
             modifier = Modifier.size(20.dp)
         )
         Text(
-            text = stringResource(R.string.autoplay),
+            text = text,
             style = textStyle,
             color = contentColor,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.centerGlyphsVertically(
+                glyphHeightAboveBaselinePx = rememberGlyphHeightAboveBaselinePx(text, textStyle),
+                verticalPadding = PaneLabelMatchingTextPadding
+            )
         )
     }
 }
@@ -704,8 +862,10 @@ private fun SplitControls(
     modifier: Modifier = Modifier
 ) = SplitBand(
     isLandscape = isLandscape,
-    canSwap = state.topApp != null || state.bottomApp != null,
-    onSwap = { sendAction(AddViewModel.Action.SwapApps) },
+    canSwap = state.quickSplit || state.topApp != null || state.bottomApp != null,
+    onSwap = {
+        sendAction(if (state.quickSplit) AddViewModel.Action.SwapQuickSplitWindows else AddViewModel.Action.SwapApps)
+    },
     modifier = modifier
 ) {
     if (state.splitForm == SizeFormat.CUSTOM) {
@@ -732,7 +892,7 @@ private fun SplitControls(
                 context.toast(manualHint)
                 sendAction(AddViewModel.Action.SetSplitForm(SizeFormat.CUSTOM))
             },
-            onFreeModeClick = { sendAction(AddViewModel.Action.SetFreeMode(true)) }
+            onFreeModeClick = { sendAction(AddViewModel.Action.SetFreeMode(true)) }.takeUnless { state.quickSplit }
         )
     }
 }
@@ -841,7 +1001,7 @@ private fun SplitOptionsCard(
     selected: SizeFormat,
     onSelect: (SizeFormat) -> Unit,
     onManualClick: () -> Unit,
-    onFreeModeClick: () -> Unit
+    onFreeModeClick: (() -> Unit)?
 ) = Column(
     modifier = Modifier
         .width(IntrinsicSize.Max)
@@ -907,13 +1067,15 @@ private fun SplitOptionsCard(
                 modifier = Modifier.fillMaxWidth(),
                 iconRotation = 90f
             )
-            ModeButton(
-                iconRes = R.drawable.ic_free_mode,
-                titleRes = R.string.free_mode_short,
-                isVertical = true,
-                onClick = onFreeModeClick,
-                modifier = Modifier.fillMaxWidth()
-            )
+            onFreeModeClick?.let { onClick ->
+                ModeButton(
+                    iconRes = R.drawable.ic_free_mode,
+                    titleRes = R.string.free_mode_short,
+                    isVertical = true,
+                    onClick = onClick,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     } else {
         Row(
@@ -931,15 +1093,17 @@ private fun SplitOptionsCard(
                     .weight(1f)
                     .fillMaxHeight()
             )
-            ModeButton(
-                iconRes = R.drawable.ic_free_mode,
-                titleRes = R.string.free_mode_short,
-                isVertical = false,
-                onClick = onFreeModeClick,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-            )
+            onFreeModeClick?.let { onClick ->
+                ModeButton(
+                    iconRes = R.drawable.ic_free_mode,
+                    titleRes = R.string.free_mode_short,
+                    isVertical = false,
+                    onClick = onClick,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                )
+            }
         }
     }
 }

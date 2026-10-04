@@ -28,6 +28,7 @@ dependencies {
     implementation(project(Modules.FEATURE_SETTINGS_APP_TASKS))
     implementation(project(Modules.FEATURE_SETTINGS_REPLACEMENT_APPS))
     implementation(project(Modules.FEATURE_SETTINGS_API))
+    implementation(project(Modules.FEATURE_SETTINGS_QUICK_SPLIT))
 
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.animation.android)

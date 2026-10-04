@@ -49,7 +49,8 @@ internal fun AppPreset.toDisplayPreset() = DisplayAppPreset(
     title = title,
     packageName = packageName,
     icon = if (icon is Drawable) icon as Drawable else null,
-    autoPlay = autoPlay
+    autoPlay = autoPlay,
+    mainWindow = mainWindow
 )
 
 internal fun PresetType.toDisplayPreset() = when (this) {
@@ -79,7 +80,8 @@ internal fun DisplayAppPreset.toDomainPreset() = AppPreset(
     title = title,
     packageName = packageName,
     icon = icon,
-    autoPlay = autoPlay
+    autoPlay = autoPlay,
+    mainWindow = mainWindow
 )
 
 internal fun DisplayPresetType.toDomainPreset() = when (this) {

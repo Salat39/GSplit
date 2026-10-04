@@ -49,7 +49,10 @@ fun PresetSelectDialog(
     onSelectLastLaunched: () -> Unit,
     onDismiss: () -> Unit,
     onSelectPresetPanel: (() -> Unit)? = null,
-    showWindowShift: Boolean = true
+    onSelectQuickSplit: (() -> Unit)? = null,
+    noCaptionWindows: Boolean = false,
+    mainWindowAvailable: Boolean = false,
+    nativeSplit: Boolean = false
 ) = BaseDialog(
     uiScaleState = uiScale,
     onDismiss = onDismiss,
@@ -67,26 +70,31 @@ fun PresetSelectDialog(
         )
         Spacer(Modifier.height(12.dp))
 
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .weight(1f, fill = false)
-                .background(AppTheme.colors.surfaceLayer1)
-        ) {
-            LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
-                items(items = presets, key = { it.id }) { preset ->
-                    RenderListItem(
-                        modifier = Modifier,
-                        preset = preset,
-                        type = RenderListType.PRESET,
-                        showWindowShift = showWindowShift,
-                        onClick = { onSelectPreset(preset) },
-                        onLongClick = { _, _ -> }
-                    )
+        // The shortcut dialog without presets keeps the quick split action
+        if (presets.isNotEmpty()) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false)
+                    .background(AppTheme.colors.surfaceLayer1)
+            ) {
+                LazyColumn(contentPadding = PaddingValues(vertical = 8.dp)) {
+                    items(items = presets, key = { it.id }) { preset ->
+                        RenderListItem(
+                            modifier = Modifier,
+                            preset = preset,
+                            type = RenderListType.PRESET,
+                            showWindowShift = !noCaptionWindows,
+                            showWindowType = preset.isWindowTypeVisible(noCaptionWindows, nativeSplit),
+                            showMainWindow = preset.isMainWindowVisible(mainWindowAvailable, nativeSplit),
+                            onClick = { onSelectPreset(preset) },
+                            onLongClick = { _, _ -> }
+                        )
+                    }
                 }
+                TopShadow()
+                BottomShadow(Modifier.align(Alignment.BottomCenter))
             }
-            TopShadow()
-            BottomShadow(Modifier.align(Alignment.BottomCenter))
         }
 
         ExtraActionRow(
@@ -100,6 +108,14 @@ fun PresetSelectDialog(
                 iconRes = R.drawable.ic_presets_grid,
                 title = stringResource(R.string.preset_panel),
                 hint = stringResource(R.string.preset_panel_shortcut_hint),
+                onClick = onClick
+            )
+        }
+        onSelectQuickSplit?.let { onClick ->
+            ExtraActionRow(
+                iconRes = R.drawable.ic_quick_split,
+                title = stringResource(R.string.quick_split),
+                hint = stringResource(R.string.quick_split_shortcut_hint),
                 onClick = onClick
             )
         }

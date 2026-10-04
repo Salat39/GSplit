@@ -3,6 +3,7 @@ package com.salat.splitlauncher
 import com.salat.splitlauncher.domain.repository.SplitLauncherRepository
 import com.salat.splitlauncher.domain.usecases.GetDarkBackgroundFlowUseCase
 import com.salat.splitlauncher.domain.usecases.GetFreedomHackFlowUseCase
+import com.salat.splitlauncher.domain.usecases.GetMainWindowAvailableFlowUseCase
 import com.salat.splitlauncher.domain.usecases.GetNativeSplitLaunchTaskFlowUseCase
 import com.salat.splitlauncher.domain.usecases.GetNoCaptionWindowsFlowUseCase
 import com.salat.splitlauncher.domain.usecases.GetSplitStartedFlowUseCase
@@ -36,4 +37,8 @@ object SplitLauncherDomainModule {
     @Provides
     fun provideGetNoCaptionWindowsFlowUseCase(repository: SplitLauncherRepository) =
         GetNoCaptionWindowsFlowUseCase(repository)
+
+    @Provides
+    fun provideGetMainWindowAvailableFlowUseCase(repository: SplitLauncherRepository) =
+        GetMainWindowAvailableFlowUseCase(repository)
 }

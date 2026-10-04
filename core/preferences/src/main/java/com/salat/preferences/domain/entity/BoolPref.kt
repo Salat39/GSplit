@@ -1,6 +1,10 @@
 package com.salat.preferences.domain.entity
 
+import android.os.Build
 import com.salat.preferences.BuildConfig
+
+// Only Android 11 moves a running app into a window without a restart
+private val taskResizeSupported = Build.VERSION.SDK_INT == Build.VERSION_CODES.R
 
 private object BoolPrefKey {
     const val MINIMIZE_BY_START = "MINIMIZE_BY_START"
@@ -26,7 +30,14 @@ private object BoolPrefKey {
     const val LAST_LAUNCHED_SPLIT_CONTRAST = "LAST_LAUNCHED_SPLIT_CONTRAST"
     const val ENABLE_ADB_HELPER = "ENABLE_ADB_HELPER"
     const val ENABLE_ADB_FORCE_STOP = "ENABLE_ADB_FORCE_STOP"
+    const val ENABLE_ADB_TASK_RESIZE = "ENABLE_ADB_TASK_RESIZE"
     const val NO_CAPTION_WINDOWS = "NO_CAPTION_WINDOWS"
+    const val CLOSE_OLD_SPLIT_WINDOWS = "CLOSE_OLD_SPLIT_WINDOWS"
+    const val QUICK_SPLIT_INSERT_FIRST = "QUICK_SPLIT_INSERT_FIRST"
+    const val QUICK_SPLIT_FIRST_CAPTION = "QUICK_SPLIT_FIRST_CAPTION"
+    const val QUICK_SPLIT_SECOND_CAPTION = "QUICK_SPLIT_SECOND_CAPTION"
+    const val QUICK_SPLIT_SKIP_SIDE_STEP = "QUICK_SPLIT_SKIP_SIDE_STEP"
+    const val QUICK_SPLIT_DARK_BACKGROUND = "QUICK_SPLIT_DARK_BACKGROUND"
 
     const val ENABLE_OVERLAYS = "ENABLE_OVERLAYS" // Both overlay toggle
 }
@@ -60,7 +71,16 @@ sealed class BoolPref(override val key: String, override val default: Boolean) :
     data object LastLaunchedSplitContrast : BoolPref(BoolPrefKey.LAST_LAUNCHED_SPLIT_CONTRAST, false)
     data object EnableAdbHelper : BoolPref(BoolPrefKey.ENABLE_ADB_HELPER, false)
     data object EnableAdbForceStop : BoolPref(BoolPrefKey.ENABLE_ADB_FORCE_STOP, false)
+    data object EnableAdbTaskResize : BoolPref(BoolPrefKey.ENABLE_ADB_TASK_RESIZE, taskResizeSupported)
     data object NoCaptionWindows : BoolPref(BoolPrefKey.NO_CAPTION_WINDOWS, true)
+    data object CloseOldSplitWindows : BoolPref(BoolPrefKey.CLOSE_OLD_SPLIT_WINDOWS, true)
+
+    // Quick split - the new window takes the first slot. The open app takes the second slot
+    data object QuickSplitInsertFirst : BoolPref(BoolPrefKey.QUICK_SPLIT_INSERT_FIRST, false)
+    data object QuickSplitFirstCaption : BoolPref(BoolPrefKey.QUICK_SPLIT_FIRST_CAPTION, false)
+    data object QuickSplitSecondCaption : BoolPref(BoolPrefKey.QUICK_SPLIT_SECOND_CAPTION, false)
+    data object QuickSplitSkipSideStep : BoolPref(BoolPrefKey.QUICK_SPLIT_SKIP_SIDE_STEP, false)
+    data object QuickSplitDarkBackground : BoolPref(BoolPrefKey.QUICK_SPLIT_DARK_BACKGROUND, false)
 
     data object EnableOverlays : BoolPref(BoolPrefKey.ENABLE_OVERLAYS, false) // Both overlay toggle
 }

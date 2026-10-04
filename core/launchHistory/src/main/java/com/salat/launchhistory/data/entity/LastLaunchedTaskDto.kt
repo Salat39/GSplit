@@ -12,5 +12,6 @@ data class LastLaunchedTaskDto(
     val bottomWindowShift: Boolean,
     val id: Long,
     val windows: List<LastLaunchedWindowDto> = emptyList(),
-    val ratio: Float = .5f
+    val ratio: Float = .5f,
+    val quickSplitOpenPackage: String = ""
 )

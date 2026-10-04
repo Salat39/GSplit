@@ -27,6 +27,8 @@ import com.salat.settings.list.presentation.route.SplitListNavRoute
 import com.salat.settings.list.presentation.splitListScreen
 import com.salat.settings.presets.presentation.navigateToSettingsPresets
 import com.salat.settings.presets.presentation.settingsPresetsScreen
+import com.salat.settings.quicksplit.presentation.navigateToSettingsQuickSplit
+import com.salat.settings.quicksplit.presentation.settingsQuickSplitScreen
 import com.salat.settings.replacementapps.navigateToSettingsReplacementApps
 import com.salat.settings.replacementapps.settingsReplacementAppsScreen
 import com.salat.settings.scheduler.presentation.navigateToSettingsScheduler
@@ -59,6 +61,7 @@ fun NavGraphBuilder.splitGraph(toolbarExtraSize: Int, navController: NavControll
         onNavigateToAppSwitchOverlay = navController::navigateToSettingsAppSwitchOverlay,
         onNavigateToDarkScreenMode = navController::navigateToSettingsDarkScreenMode,
         onNavigateToWindowShiftMode = navController::navigateToSettingsWindowShiftMode,
+        onNavigateToQuickSplit = navController::navigateToSettingsQuickSplit,
         onNavigateToAppTasks = navController::navigateToSettingsAppTasks,
         onNavigateToApi = navController::navigateToSettingsApi,
         onNavigateBack = navController::navigateUp
@@ -99,6 +102,10 @@ fun NavGraphBuilder.splitGraph(toolbarExtraSize: Int, navController: NavControll
         onNavigateBack = navController::navigateUp
     )
     settingsApiScreen(
+        onNavigateBack = navController::navigateUp
+    )
+    settingsQuickSplitScreen(
+        onNavigateToDefaultRatio = { navController.navigateToAdd(editId = null, type = null, quickSplit = true) },
         onNavigateBack = navController::navigateUp
     )
 }

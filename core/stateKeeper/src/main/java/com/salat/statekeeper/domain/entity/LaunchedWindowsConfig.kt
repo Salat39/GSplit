@@ -16,5 +16,9 @@ data class LaunchedWindowsConfig(
     val freePresetWindowPackages: List<String> = emptyList(),
     val firstWithCaption: Boolean = false,
     val secondWithCaption: Boolean = false,
-    val ratio: Float = .5f
+    val ratio: Float = .5f,
+    val mainWindowPackage: String = "",
+    val mainWindowExpanded: Boolean = false,
+    // Quick split - the app that was in full screen before the split
+    val quickSplitOpenPackage: String = ""
 )

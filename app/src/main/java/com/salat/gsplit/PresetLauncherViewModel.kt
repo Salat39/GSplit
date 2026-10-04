@@ -21,10 +21,13 @@ import com.salat.splitlauncher.domain.entity.SplitLaunchWindow
 import com.salat.splitlauncher.domain.usecases.GetFreedomHackFlowUseCase
 import com.salat.splitlauncher.domain.usecases.LaunchSplitUseCase
 import com.salat.splitpresets.domain.usecases.GetPresetByIdUseCase
+import com.salat.statekeeper.domain.usecases.SetLaunchRunningUseCase
 import com.salat.statekeeper.domain.usecases.SetSkipAutoLaunchUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -41,7 +44,8 @@ class PresetLauncherViewModel @Inject constructor(
     private val setSkipAutoLaunchUseCase: SetSkipAutoLaunchUseCase,
     private val logLaunchTypeUseCase: LogLaunchTypeUseCase,
     private val getPresetByIdUseCase: GetPresetByIdUseCase,
-    private val getLastLaunchedSplitUseCase: GetLastLaunchedSplitUseCase
+    private val getLastLaunchedSplitUseCase: GetLastLaunchedSplitUseCase,
+    private val setLaunchRunningUseCase: SetLaunchRunningUseCase
 ) : ViewModel() {
     private val _launchFreedomHackState = Channel<Unit>()
     val launchFreedomHackState = _launchFreedomHackState.receiveAsFlow()
@@ -70,7 +74,15 @@ class PresetLauncherViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) { logLaunchTypeUseCase.execute("no_ui") }
     }
 
-    internal fun findAndLaunchPresetById(id: Long) = viewModelScope.launch(Dispatchers.IO) {
+    // The accessibility service does not close the dark screen while the launch runs
+    private fun launchSplitTask(block: suspend CoroutineScope.() -> Unit): Job {
+        setLaunchRunningUseCase.execute(true)
+        return viewModelScope.launch(Dispatchers.IO, block = block).apply {
+            invokeOnCompletion { setLaunchRunningUseCase.execute(false) }
+        }
+    }
+
+    internal fun findAndLaunchPresetById(id: Long) = launchSplitTask {
         getPresetByIdUseCase.execute(id)?.let { preset ->
             // show dark screen before call split
             if (preset.darkBackground) {
@@ -95,7 +107,7 @@ class PresetLauncherViewModel @Inject constructor(
         }
     }
 
-    internal fun launchLastSplit() = viewModelScope.launch(Dispatchers.IO) {
+    internal fun launchLastSplit() = launchSplitTask {
         getLastLaunchedSplitUseCase.execute()?.let { lastLaunchedTask ->
             val task = lastLaunchedTask.toSplitLaunchTask()
 
@@ -132,7 +144,7 @@ class PresetLauncherViewModel @Inject constructor(
         windowShift: Int,
         firstCaption: Int,
         secondCaption: Int
-    ) = viewModelScope.launch(Dispatchers.IO) {
+    ) = launchSplitTask {
         try {
             val firstApp = SplitLaunchApp(
                 title = firstPackage,
@@ -188,13 +200,48 @@ class PresetLauncherViewModel @Inject constructor(
         }
     }
 
+    // The open app takes its window as in a preset launch. The ADB settings choose a move or a restart
+    internal fun launchQuickSplit(
+        firstPackage: String,
+        secondPackage: String,
+        openPackage: String,
+        ratio: Float,
+        firstCaption: Boolean,
+        secondCaption: Boolean,
+        darkBackground: Boolean
+    ) = launchSplitTask {
+        val task = SplitLaunchTask(
+            firstApp = SplitLaunchApp(title = firstPackage, packageName = firstPackage, withCaption = firstCaption),
+            type = SplitLaunchType.CUSTOM,
+            secondApp = SplitLaunchApp(title = secondPackage, packageName = secondPackage, withCaption = secondCaption),
+            autoStart = false,
+            darkBackground = darkBackground,
+            bottomWindowShift = false,
+            id = 0L,
+            ratio = ratio,
+            quickSplitOpenPackage = openPackage
+        )
+
+        if (task.darkBackground) {
+            _toolbarExtraSizeState.emit(loadIntPrefUseCase.execute(IntPref.ToolbarExtraSpace))
+            _launchDarkScreenState.emit(true)
+        }
+
+        launchSplitUseCase.execute(task, SplitLaunchSource.SHORTCUT)
+        setSkipAutoLaunchUseCase.execute(true)
+
+        if (!task.darkBackground) {
+            _finishState.send(Unit)
+        }
+    }
+
     internal fun launchFreeWindow(
         packageName: String,
         bounds: FloatArray,
         autoPlay: Boolean,
         pin: Boolean,
         withCaption: Boolean
-    ) = viewModelScope.launch(Dispatchers.IO) {
+    ) = launchSplitTask {
         val (left, top, right, bottom) = bounds
         val window = SplitLaunchWindow(
             app = SplitLaunchApp(
@@ -233,7 +280,8 @@ class PresetLauncherViewModel @Inject constructor(
             title = this.title,
             packageName = this.packageName,
             autoPlay = this.autoPlay,
-            withCaption = this.withCaption
+            withCaption = this.withCaption,
+            mainWindow = this.mainWindow
         )
     }
 
@@ -251,7 +299,8 @@ class PresetLauncherViewModel @Inject constructor(
             bottomWindowShift = this.bottomWindowShift,
             id = this.id,
             windows = this.windows.map { it.toSplitLaunchWindow() },
-            ratio = this.ratio
+            ratio = this.ratio,
+            quickSplitOpenPackage = this.quickSplitOpenPackage
         )
     }
 

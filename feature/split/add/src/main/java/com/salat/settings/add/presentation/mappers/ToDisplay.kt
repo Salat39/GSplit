@@ -29,7 +29,8 @@ internal fun SplitPreset.toDisplay(installedApps: List<InstalledAppInfo>): Pair<
             icon = item.icon as? Drawable,
             isMediaApp = item.isMedia,
             autoPlay = this.firstApp.autoPlay,
-            withCaption = this.firstApp.withCaption
+            withCaption = this.firstApp.withCaption,
+            mainWindow = this.firstApp.mainWindow
         )
     }
     val secondApp = installedApps.find { it.packageName == this.secondApp.packageName }?.let { item ->
@@ -39,7 +40,8 @@ internal fun SplitPreset.toDisplay(installedApps: List<InstalledAppInfo>): Pair<
             icon = item.icon as? Drawable,
             isMediaApp = item.isMedia,
             autoPlay = this.secondApp.autoPlay,
-            withCaption = this.secondApp.withCaption
+            withCaption = this.secondApp.withCaption,
+            mainWindow = this.secondApp.mainWindow
         )
     }
     return firstApp to secondApp
@@ -55,7 +57,8 @@ internal fun List<FreeWindowPreset>.toDisplay(installedApps: List<InstalledAppIn
             icon = installed?.icon as? Drawable,
             isMediaApp = installed?.isMedia ?: false,
             autoPlay = window.app.autoPlay,
-            withCaption = window.app.withCaption
+            withCaption = window.app.withCaption,
+            mainWindow = window.app.mainWindow
         ),
         left = window.left,
         top = window.top,

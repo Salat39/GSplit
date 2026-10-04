@@ -5,6 +5,7 @@ private object StringPrefKey {
     const val SCHEDULER_STORAGE = "SCHEDULER_STORAGE"
     const val REPLACEMENT_APPS_STORAGE = "REPLACEMENT_APPS_STORAGE"
     const val LAUNCH_HISTORY_STORAGE = "LAUNCH_HISTORY_STORAGE"
+    const val QUICK_SPLIT_APPS = "QUICK_SPLIT_APPS"
 }
 
 sealed class StringPref(override val key: String, override val default: String) : AnyPref {
@@ -12,4 +13,7 @@ sealed class StringPref(override val key: String, override val default: String) 
     data object SchedulerStorage : StringPref(StringPrefKey.SCHEDULER_STORAGE, "")
     data object ReplacementAppsStorage : StringPref(StringPrefKey.REPLACEMENT_APPS_STORAGE, "")
     data object LaunchHistoryStorage : StringPref(StringPrefKey.LAUNCH_HISTORY_STORAGE, "")
+
+    // Package names separated by commas
+    data object QuickSplitApps : StringPref(StringPrefKey.QUICK_SPLIT_APPS, "")
 }

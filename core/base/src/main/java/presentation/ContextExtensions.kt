@@ -490,7 +490,7 @@ fun Context.isDeveloperModeEnabled(): Boolean {
 
 fun Context.toast(text: String) {
     try {
-        Toast.makeText(this, text, Toast.LENGTH_LONG).show()
+        Toast.makeText(applicationContext, text, Toast.LENGTH_LONG).show()
     } catch (e: Exception) {
         Timber.e(e)
     }

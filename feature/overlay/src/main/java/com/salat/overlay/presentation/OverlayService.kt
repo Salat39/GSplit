@@ -70,7 +70,9 @@ import com.salat.overlay.presentation.entity.DisplayReplacementAppItem
 import com.salat.overlay.presentation.entity.DisplaySplitPreset
 import com.salat.overlay.presentation.mappers.toDisplay
 import com.salat.overlay.presentation.mappers.toDisplayPreset
+import com.salat.preferences.domain.DataStoreRepository
 import com.salat.preferences.domain.PreferencesRepository
+import com.salat.preferences.domain.entity.BoolPref
 import com.salat.preferences.domain.entity.BoolSharedPref
 import com.salat.preferences.domain.entity.FloatSharedPref
 import com.salat.preferences.domain.entity.IntSharedPref
@@ -106,6 +108,9 @@ class OverlayService : Service() {
 
     @Inject
     lateinit var preferences: PreferencesRepository
+
+    @Inject
+    lateinit var dataStore: DataStoreRepository
 
     @Inject
     lateinit var stateKeeper: StateKeeperRepository
@@ -445,6 +450,7 @@ class OverlayService : Service() {
         isFreeSplit: Boolean
     ) {
         if (interactiveMenuContainer != null) return
+        stateKeeper.setReplaceMenuShown(true)
 
         // 1. Calculate margin in pixels (10 dp → px)
         val marginPx = TypedValue.applyDimension(
@@ -673,6 +679,10 @@ class OverlayService : Service() {
         onClick: (DisplaySplitPreset) -> Unit
     ) {
         val noCaptionWindows by splitLauncher.noCaptionWindowsFlow.collectAsState()
+        val mainWindowAvailable by splitLauncher.mainWindowAvailableFlow.collectAsState()
+        val nativeSplit by remember {
+            dataStore.getBooleanPrefFlow(BoolPref.ExperimentalNativeSplit)
+        }.collectAsState(false)
         Spacer(Modifier.height(8.dp))
         Text(
             text = stringResource(R.string.presets),
@@ -686,8 +696,9 @@ class OverlayService : Service() {
             verticalArrangement = Arrangement.spacedBy(REPLACEMENT_MENU_VERTICAL_ARRANGEMENT.dp)
         ) {
             items.forEach { item ->
+                val showMainWindow = mainWindowAvailable && (item.type == DisplayPresetType.FREE || !nativeSplit)
                 if (item.type == DisplayPresetType.FREE) {
-                    FreePresetMenuItem(item, presetsNames, onClick)
+                    FreePresetMenuItem(item, presetsNames, showMainWindow, onClick)
                 } else {
                     Row(
                         modifier = Modifier
@@ -725,6 +736,21 @@ class OverlayService : Service() {
                                         painter =
                                         rememberPainterResource(R.drawable.ic_play),
                                         contentDescription = "",
+                                        tint = Color.White
+                                    )
+                                }
+                                if (showMainWindow && item.firstApp.mainWindow) {
+                                    Icon(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .offset(x = 2.dp, y = (-2).dp)
+                                            .alpha(.9f)
+                                            .size(22.dp)
+                                            .clip(CircleShape)
+                                            .background(AppTheme.colors.contentAccent)
+                                            .padding(5.dp),
+                                        painter = rememberPainterResource(R.drawable.ic_crown),
+                                        contentDescription = null,
                                         tint = Color.White
                                     )
                                 }
@@ -818,6 +844,21 @@ class OverlayService : Service() {
                                         tint = Color.White
                                     )
                                 }
+                                if (showMainWindow && item.secondApp.mainWindow) {
+                                    Icon(
+                                        modifier = Modifier
+                                            .align(Alignment.TopEnd)
+                                            .offset(x = 2.dp, y = (-2).dp)
+                                            .alpha(.9f)
+                                            .size(22.dp)
+                                            .clip(CircleShape)
+                                            .background(AppTheme.colors.contentAccent)
+                                            .padding(5.dp),
+                                        painter = rememberPainterResource(R.drawable.ic_crown),
+                                        contentDescription = null,
+                                        tint = Color.White
+                                    )
+                                }
                             }
                             if (presetsNames) {
                                 Spacer(Modifier.height(REPLACEMENT_MENU_ICON_TO_TITLE_SPACE.dp))
@@ -841,6 +882,7 @@ class OverlayService : Service() {
         interactiveMenuContainer?.let {
             windowManager.removeView(it)
             interactiveMenuContainer = null
+            stateKeeper.setReplaceMenuShown(false)
         }
     }
 }

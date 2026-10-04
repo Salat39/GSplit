@@ -5,6 +5,7 @@ sealed class AccessibilityServiceEvent {
     data object RestoreFocus : AccessibilityServiceEvent()
     data class FocusWindow(val packageName: String) : AccessibilityServiceEvent()
     data object CloseSplit : AccessibilityServiceEvent()
+    data class CloseQuickSplit(val sessionId: Long) : AccessibilityServiceEvent()
     data class ReplaceWindow(
         val index: Int, // 0 or 1, first or second window
         val packageName: String,

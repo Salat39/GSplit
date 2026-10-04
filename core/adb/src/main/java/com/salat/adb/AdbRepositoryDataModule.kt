@@ -3,6 +3,7 @@ package com.salat.adb
 import com.salat.adb.data.repository.AdbRepositoryImpl
 import com.salat.adb.domain.repository.AdbRepository
 import com.salat.preferences.domain.DataStoreRepository
+import com.salat.preferences.domain.PreferencesRepository
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -15,5 +16,6 @@ object AdbRepositoryDataModule {
 
     @Provides
     @Singleton
-    fun provideAdbRepository(dataStore: DataStoreRepository): AdbRepository = AdbRepositoryImpl(dataStore)
+    fun provideAdbRepository(dataStore: DataStoreRepository, preferences: PreferencesRepository): AdbRepository =
+        AdbRepositoryImpl(dataStore, preferences)
 }

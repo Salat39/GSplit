@@ -239,7 +239,8 @@ internal fun RenderList(
                                 RenderListType.HISTORY_CONTRAST
                             } else RenderListType.HISTORY,
                             showWindowShift = !state.noCaptionWindows,
-                            showWindowType = state.isWindowTypeVisible(history),
+                            showWindowType = history.isWindowTypeVisible(state.noCaptionWindows, state.nativeSplit),
+                            showMainWindow = history.isMainWindowVisible(state.mainWindowAvailable, state.nativeSplit),
                             onClick = {
                                 sendAction(ListViewModel.Action.PrepareOpenSplit(history))
                             },
@@ -284,7 +285,8 @@ internal fun RenderList(
                     preset,
                     RenderListType.PRESET,
                     showWindowShift = !state.noCaptionWindows,
-                    showWindowType = state.isWindowTypeVisible(preset),
+                    showWindowType = preset.isWindowTypeVisible(state.noCaptionWindows, state.nativeSplit),
+                    showMainWindow = preset.isMainWindowVisible(state.mainWindowAvailable, state.nativeSplit),
                     dragHandle = if (state.reorderMode) {
                         Modifier.presetDragHandle(dragState, preset.id) { context.vibrate() }
                     } else null,
@@ -304,5 +306,8 @@ internal fun RenderList(
 }
 
 // Native split ignores the window type and does not apply to free presets
-private fun ListViewModel.ViewState.isWindowTypeVisible(preset: DisplaySplitPreset) =
-    noCaptionWindows && (preset.type == DisplayPresetType.FREE || !nativeSplit)
+internal fun DisplaySplitPreset.isWindowTypeVisible(noCaptionWindows: Boolean, nativeSplit: Boolean) =
+    noCaptionWindows && (type == DisplayPresetType.FREE || !nativeSplit)
+
+internal fun DisplaySplitPreset.isMainWindowVisible(mainWindowAvailable: Boolean, nativeSplit: Boolean) =
+    mainWindowAvailable && (type == DisplayPresetType.FREE || !nativeSplit)

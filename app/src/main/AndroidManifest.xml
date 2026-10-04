@@ -122,6 +122,22 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".QuickSplitActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:label="@string/quick_split"
+            android:launchMode="singleTask"
+            android:noHistory="true"
+            android:taskAffinity="${applicationId}.quickSplit"
+            android:theme="@style/Theme.TransparentNoSplash">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
         <receiver
             android:name=".presentation.BootReceiver"
             android:exported="true">

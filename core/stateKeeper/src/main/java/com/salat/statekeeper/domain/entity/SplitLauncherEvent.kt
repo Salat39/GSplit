@@ -7,4 +7,6 @@ sealed class SplitLauncherEvent {
         val packageName: String,
         val autoPlay: Boolean
     ) : SplitLauncherEvent()
+
+    data class MoveToFullscreen(val packageName: String) : SplitLauncherEvent()
 }

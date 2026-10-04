@@ -12,9 +12,11 @@ interface AdbRepository {
 
     suspend fun ensureConnected(): Boolean
 
-    suspend fun isAppInFreeform(packageName: String): Boolean?
+    suspend fun isAppInWindow(packageName: String): Boolean?
 
     suspend fun isAppLaunched(packageName: String): Boolean
+
+    suspend fun hasForegroundService(packageName: String): Boolean
 
     suspend fun getTaskId(packageName: String): Int?
 
@@ -34,7 +36,21 @@ interface AdbRepository {
 
     suspend fun minimize(taskId: Int)
 
+    suspend fun removeOwnWindowTasks(ownPackage: String, ownTaskIds: Set<Int>, keepPackages: Set<String>): Set<Int>
+
     suspend fun resizeNewTask(packageName: String, bounds: Rect): Boolean
+
+    suspend fun getResizeableFullscreenTaskId(packageName: String): Int?
+
+    suspend fun moveTaskToWindow(taskId: Int, windowingMode: Int, bounds: Rect, setWindowingModeCode: Int): Boolean
+
+    suspend fun getTaskWindowingMode(taskId: Int): String?
+
+    suspend fun setTaskWindowingMode(taskId: Int, windowingMode: Int, bounds: Rect, setWindowingModeCode: Int): Boolean
+
+    suspend fun moveTaskToFullscreen(taskId: Int, setWindowingModeCode: Int): Boolean
+
+    suspend fun focusTaskInBounds(taskId: Int, bounds: Rect): Boolean
 
     suspend fun getForegroundAppPackageName(): String?
 

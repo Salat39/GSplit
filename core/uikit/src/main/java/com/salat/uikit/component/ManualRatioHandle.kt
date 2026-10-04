@@ -1,4 +1,4 @@
-package com.salat.settings.add.presentation.components
+package com.salat.uikit.component
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -43,7 +43,7 @@ import com.salat.uikit.theme.AppTheme
 private val handleShape = RoundedCornerShape(percent = 50)
 
 @Composable
-internal fun ManualRatioHandle(
+fun ManualRatioHandle(
     isLandscape: Boolean,
     ratio: Float,
     ratioPerPx: Float,

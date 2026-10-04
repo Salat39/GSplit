@@ -27,5 +27,9 @@ fun NavGraphBuilder.splitAddScreen(onNavigateBack: () -> Unit) = composable<Spli
     )
 }
 
-fun NavController.navigateToAdd(editId: Long?, type: Int?, builder: (NavOptionsBuilder.() -> Unit)? = null) =
-    navigate(SplitAddNavRoute(editId, type), builder ?: {})
+fun NavController.navigateToAdd(
+    editId: Long?,
+    type: Int?,
+    quickSplit: Boolean = false,
+    builder: (NavOptionsBuilder.() -> Unit)? = null
+) = navigate(SplitAddNavRoute(editId, type, quickSplit), builder ?: {})

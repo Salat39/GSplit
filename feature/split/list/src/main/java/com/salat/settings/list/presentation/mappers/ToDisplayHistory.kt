@@ -18,7 +18,7 @@ internal fun LastLaunchedTask.toDisplay(appsInfo: List<InstalledAppInfo>, autoSt
     darkBackground = darkBackground,
     bottomWindowShift = bottomWindowShift,
     quickAccess = false,
-    id = 0,
+    id = id,
     windows = windows.map { window ->
         DisplayFreeWindow(
             app = window.app.toDisplay(appsInfo.find { app -> app.packageName == window.app.packageName }),
@@ -37,7 +37,8 @@ internal fun LastLaunchedApp.toDisplay(find: InstalledAppInfo?) = DisplayAppPres
     packageName = find?.packageName ?: packageName,
     icon = if (find?.icon is Drawable) find.icon as Drawable else null,
     autoPlay = autoPlay,
-    withCaption = withCaption
+    withCaption = withCaption,
+    mainWindow = mainWindow
 )
 
 internal fun LastLaunchedType.toDisplay() = when (this) {

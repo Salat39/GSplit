@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.salat.resources.R
 import com.salat.settings.common.presentation.RenderGroupDivider
 import com.salat.settings.common.presentation.RenderGroupTitle
+import com.salat.settings.common.presentation.RenderIconMenuDivider
 import com.salat.settings.common.presentation.RenderSettingsContent
 import com.salat.settings.common.presentation.RenderSettingsGroup
 import com.salat.settings.common.presentation.RenderToolbar
@@ -75,6 +76,30 @@ internal fun SettingsAdbScreen(
                             groupDivider = false,
                             onChange = { sendAction(SettingsAdbViewModel.Action.SetEnableAdbForceStop(it)) }
                         )
+
+                        if (state.taskResizeSupported) {
+                            RenderIconMenuDivider()
+
+                            RenderSwitcher(
+                                title = stringResource(R.string.task_resize_app_title),
+                                subtitle = stringResource(R.string.task_resize_app_desc),
+                                value = state.enableAdbTaskResize,
+                                groupDivider = false,
+                                onChange = { sendAction(SettingsAdbViewModel.Action.SetEnableAdbTaskResize(it)) }
+                            )
+                        }
+
+                        if (state.closeOldSplitWindowsSupported) {
+                            RenderIconMenuDivider()
+
+                            RenderSwitcher(
+                                title = stringResource(R.string.close_old_split_windows_title),
+                                subtitle = stringResource(R.string.close_old_split_windows_desc),
+                                value = state.closeOldSplitWindows,
+                                groupDivider = false,
+                                onChange = { sendAction(SettingsAdbViewModel.Action.SetCloseOldSplitWindows(it)) }
+                            )
+                        }
                     }
 
                     RenderGroupDivider()

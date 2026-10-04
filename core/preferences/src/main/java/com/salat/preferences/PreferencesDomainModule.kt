@@ -19,6 +19,7 @@ import com.salat.preferences.domain.usecases.SaveFloatPrefUseCase
 import com.salat.preferences.domain.usecases.SaveFloatSharedPrefUseCase
 import com.salat.preferences.domain.usecases.SaveIntPrefUseCase
 import com.salat.preferences.domain.usecases.SaveIntSharedPrefUseCase
+import com.salat.preferences.domain.usecases.SaveStringPrefUseCase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -69,6 +70,9 @@ object PreferencesDomainModule {
 
     @Provides
     fun provideSaveIntPrefUseCase(preferences: DataStoreRepository) = SaveIntPrefUseCase(preferences)
+
+    @Provides
+    fun provideSaveStringPrefUseCase(preferences: DataStoreRepository) = SaveStringPrefUseCase(preferences)
 
     @Provides
     fun provideFlowPrefsUseCase(preferences: DataStoreRepository) = FlowPrefsUseCase(preferences)

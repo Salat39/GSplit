@@ -10,5 +10,6 @@ data class DeviceAppInfo(
     val icon: Drawable?,
     val isMediaApp: Boolean,
     val autoPlay: Boolean? = null,
-    val withCaption: Boolean = false
+    val withCaption: Boolean = false,
+    val mainWindow: Boolean = false
 )

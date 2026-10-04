@@ -109,8 +109,20 @@ class PresetLauncherActivity : ComponentActivity() {
         val freePackage = intent.getStringExtra("free_package") ?: ""
         val freeBounds = intent.getFloatArrayExtra("free_bounds")
 
+        val quickSplitOpenPackage = intent.getStringExtra(QuickSplitActivity.EXTRA_OPEN_PACKAGE).orEmpty()
+
         if (launchLast) {
             viewModel.launchLastSplit()
+        } else if (quickSplitOpenPackage.isNotEmpty() && firstPackage.isNotEmpty() && secondPackage.isNotEmpty()) {
+            viewModel.launchQuickSplit(
+                firstPackage = firstPackage,
+                secondPackage = secondPackage,
+                openPackage = quickSplitOpenPackage,
+                ratio = intent.getFloatExtra(QuickSplitActivity.EXTRA_RATIO, .5f),
+                firstCaption = intent.getIntExtra("first_caption", 0) == 1,
+                secondCaption = intent.getIntExtra("second_caption", 0) == 1,
+                darkBackground = intent.getIntExtra("dark_background", 0) == 1
+            )
         } else if (freePackage.isNotEmpty() && freeBounds?.size == 4) {
             viewModel.launchFreeWindow(
                 packageName = freePackage,

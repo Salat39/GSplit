@@ -27,7 +27,7 @@ import com.salat.uikit.theme.AppTheme
 
 @Composable
 internal fun RenderToolbar(
-    isEdit: Boolean,
+    title: String,
     onNavigateToBack: () -> Unit,
     showApply: State<Boolean>,
     onApply: () -> Unit
@@ -54,7 +54,7 @@ internal fun RenderToolbar(
         Spacer(Modifier.width(10.dp))
 
         Text(
-            text = stringResource(if (isEdit) R.string.editing_a_preset else R.string.creating_a_preset),
+            text = title,
             modifier = Modifier.weight(1f),
             color = AppTheme.colors.contentPrimary,
             style = AppTheme.typography.toolbar,

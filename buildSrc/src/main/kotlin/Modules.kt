@@ -38,6 +38,7 @@ object Modules {
     const val FEATURE_SETTINGS_APP_TASKS = ":feature:settings:appTasks" // app tasks settings
     const val FEATURE_SETTINGS_REPLACEMENT_APPS = ":feature:settings:replacementApps" // replacement apps settings
     const val FEATURE_SETTINGS_API = ":feature:settings:api" // api settings
+    const val FEATURE_SETTINGS_QUICK_SPLIT = ":feature:settings:quickSplit" // quick split settings and steps
     const val FEATURE_SETTINGS_COMMON = ":feature:settings:common" // Common settings module
     const val FEATURE_OVERLAY = ":feature:overlay" // System overlay
 }

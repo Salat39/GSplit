@@ -14,7 +14,8 @@ fun DeviceAppInfo.toDomain() = AppPreset(
     packageName = packageName,
     icon = null,
     autoPlay = autoPlay,
-    withCaption = withCaption
+    withCaption = withCaption,
+    mainWindow = mainWindow
 )
 
 internal fun DisplayFreeWindow.toDomain() = FreeWindowPreset(

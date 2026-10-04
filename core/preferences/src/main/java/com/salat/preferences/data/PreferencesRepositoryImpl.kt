@@ -7,11 +7,15 @@ import com.salat.preferences.domain.PreferencesRepository
 import com.salat.preferences.domain.entity.BoolSharedPref
 import com.salat.preferences.domain.entity.FloatSharedPref
 import com.salat.preferences.domain.entity.IntSharedPref
+import com.salat.preferences.domain.entity.PrivateStringSharedPref
 import com.salat.preferences.domain.entity.StringSharedPref
 
 class PreferencesRepositoryImpl(context: Context) : PreferencesRepository {
     private val sharedPreferences: SharedPreferences =
         context.getSharedPreferences("app_config", Context.MODE_PRIVATE)
+
+    private val privatePreferences: SharedPreferences =
+        context.getSharedPreferences("private_config", Context.MODE_PRIVATE)
 
     override fun getValue(pref: StringSharedPref) = sharedPreferences.getString(pref.key, pref.default) ?: pref.default
 
@@ -48,4 +52,10 @@ class PreferencesRepositoryImpl(context: Context) : PreferencesRepository {
             if (commitImmediately) it.commit() else it.apply()
         }
     }
+
+    override fun getValue(pref: PrivateStringSharedPref): String? = privatePreferences.getString(pref.key, null)
+
+    override fun setValues(values: Map<PrivateStringSharedPref, String>) = privatePreferences.edit()
+        .apply { values.forEach { (pref, value) -> putString(pref.key, value) } }
+        .commit()
 }

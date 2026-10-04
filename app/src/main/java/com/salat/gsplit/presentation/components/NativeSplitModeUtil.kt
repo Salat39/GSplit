@@ -10,6 +10,7 @@ import androidx.annotation.RequiresApi
 import androidx.core.app.ActivityOptionsCompat
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
+import timber.log.Timber
 
 /** The primary container driving the screen to be in split-screen mode. */
 private const val WINDOWING_MODE_SPLIT_SCREEN_PRIMARY = 3
@@ -101,7 +102,9 @@ class NativeSplitModeUtil {
                     }
 
                     // Launch activities: first the bottom one, then the top one
-                    parent.startActivities(arrayOf(intentBottom, intentTop), options)
+                    // System rejects the launch if a split screen primary task already exists
+                    runCatching { parent.startActivities(arrayOf(intentBottom, intentTop), options) }
+                        .onFailure { Timber.e(it) }
 
                     // Remove the observer after the work is done
                     observer?.let { parent.lifecycle.removeObserver(it) }

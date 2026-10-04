@@ -64,6 +64,7 @@ internal fun SettingsGeneralScreen(
     onNavigateToAppSwitchOverlay: () -> Unit = {},
     onNavigateToDarkScreenMode: () -> Unit = {},
     onNavigateToWindowShiftMode: () -> Unit = {},
+    onNavigateToQuickSplit: () -> Unit = {},
     onNavigateToAppTasks: () -> Unit = {},
     onNavigateToApi: () -> Unit = {},
     onNavigateBack: () -> Unit = {}
@@ -174,6 +175,16 @@ internal fun SettingsGeneralScreen(
                             onClick = onNavigateToWindowShiftMode
                         )
                     }
+
+                    RenderIconMenuDivider(GroupButtonTextStart)
+
+                    RenderGroupButton(
+                        title = stringResource(R.string.quick_split),
+                        subtitle = stringResource(R.string.quick_split_desc),
+                        icon = painterResource(R.drawable.ic_quick_split),
+                        iconSize = 29,
+                        onClick = onNavigateToQuickSplit
+                    )
                 }
 
                 RenderGroupDivider()
@@ -301,7 +312,7 @@ internal fun SettingsGeneralScreen(
                                         context.startActivity(intent)
                                     } else {
                                         Toast.makeText(
-                                            context,
+                                            context.applicationContext,
                                             context.getString(R.string.telegram_not_installed),
                                             Toast.LENGTH_SHORT
                                         ).show()

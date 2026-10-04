@@ -46,7 +46,7 @@ import com.salat.uikit.theme.AppTheme
 
 private const val PANE_BADGE_ALPHA = .24f
 private const val PANE_BADGE_TEXT_ALPHA = .85f
-private val PaneLabelMatchingTextPadding = 3.dp
+internal val PaneLabelMatchingTextPadding = 3.dp
 
 internal enum class WindowTypeSwitchVariant {
     PANE,
@@ -195,7 +195,7 @@ private fun PaneWindowTypeSegment(
 }
 
 @Composable
-private fun rememberGlyphHeightAboveBaselinePx(text: String, style: TextStyle): Int {
+internal fun rememberGlyphHeightAboveBaselinePx(text: String, style: TextStyle): Int {
     val textSizePx = with(LocalDensity.current) { style.fontSize.toPx() }
     return remember(text, textSizePx) {
         val bounds = Rect()
@@ -204,7 +204,7 @@ private fun rememberGlyphHeightAboveBaselinePx(text: String, style: TextStyle): 
     }
 }
 
-private fun Modifier.centerGlyphsVertically(glyphHeightAboveBaselinePx: Int, verticalPadding: Dp) =
+internal fun Modifier.centerGlyphsVertically(glyphHeightAboveBaselinePx: Int, verticalPadding: Dp) =
     layout { measurable, constraints ->
         val placeable = measurable.measure(constraints)
         val height = placeable.height + verticalPadding.roundToPx() * 2

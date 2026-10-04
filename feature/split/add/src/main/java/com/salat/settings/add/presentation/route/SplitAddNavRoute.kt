@@ -4,5 +4,6 @@ import kotlinx.serialization.Serializable
 
 const val SPLIT_ADD_NAV_ROUTE_NAME = "SplitAddNavRoute"
 
+// quickSplit opens the editor of the quick split default ratio instead of a preset
 @Serializable
-data class SplitAddNavRoute(val editId: Long?, val type: Int?)
+data class SplitAddNavRoute(val editId: Long?, val type: Int?, val quickSplit: Boolean = false)

@@ -62,7 +62,12 @@ private const val PIN_ICON_EM = .76f
 private const val CAPTION_GLYPH_EM = .65f
 
 @Composable
-internal fun FreePresetContent(preset: DisplaySplitPreset, showWindowType: Boolean, modifier: Modifier = Modifier) {
+internal fun FreePresetContent(
+    preset: DisplaySplitPreset,
+    showWindowType: Boolean,
+    showMainWindow: Boolean,
+    modifier: Modifier = Modifier
+) {
     val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
     val subtitleStyle = AppTheme.typography.dialogSubtitle
@@ -82,7 +87,7 @@ internal fun FreePresetContent(preset: DisplaySplitPreset, showWindowType: Boole
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(STATUS_GAP.dp)
         ) {
-            WindowChipsRow(preset.windows, showCaptions = showWindowType)
+            WindowChipsRow(preset.windows, showCaptions = showWindowType, showMainWindow = showMainWindow)
 
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -105,44 +110,49 @@ internal fun FreePresetContent(preset: DisplaySplitPreset, showWindowType: Boole
 }
 
 @Composable
-private fun WindowChipsRow(windows: List<DisplayFreeWindow>, showCaptions: Boolean) = SubcomposeLayout { constraints ->
-    val spacing = CHIP_SPACING.dp.roundToPx()
-    val looseConstraints = constraints.copy(minWidth = 0, minHeight = 0)
-    val chips = subcompose("chips") {
-        windows.forEachIndexed { index, window ->
-            WindowChip(
-                app = window.app,
-                alwaysOnTop = window.alwaysOnTop,
-                // A pinned window always opens with the top bar. The pin icon shows this
-                showCaption = showCaptions && window.app.withCaption && !window.alwaysOnTop,
-                color = freeWindowColor(index)
-            )
+private fun WindowChipsRow(windows: List<DisplayFreeWindow>, showCaptions: Boolean, showMainWindow: Boolean) =
+    SubcomposeLayout { constraints ->
+        val spacing = CHIP_SPACING.dp.roundToPx()
+        val looseConstraints = constraints.copy(minWidth = 0, minHeight = 0)
+        val chips = subcompose("chips") {
+            windows.forEachIndexed { index, window ->
+                WindowChip(
+                    app = window.app,
+                    alwaysOnTop = window.alwaysOnTop,
+                    // A pinned window always opens with the top bar. The pin icon shows this
+                    showCaption = showCaptions && window.app.withCaption && !window.alwaysOnTop,
+                    isMainWindow = showMainWindow && window.app.mainWindow,
+                    color = freeWindowColor(index)
+                )
+            }
+        }
+        val chipHeight = CHIP_HEIGHT.dp.roundToPx()
+        val chipEnds = chips.runningFold(-spacing) { end, chip -> end + spacing + chip.maxIntrinsicWidth(chipHeight) }
+            .drop(1)
+
+        var visibleCount = chips.size
+        var moreChip: Placeable? = null
+        fun moreChipSpace() = moreChip?.let { spacing + it.width } ?: 0
+        while (visibleCount > 1 && chipEnds[visibleCount - 1] + moreChipSpace() > constraints.maxWidth) {
+            visibleCount--
+            val hiddenCount = chips.size - visibleCount
+            moreChip = subcompose(visibleCount) { MoreChip(hiddenCount) }.single().measure(looseConstraints)
+        }
+
+        val chipConstraints = looseConstraints.copy(
+            maxWidth = (constraints.maxWidth - moreChipSpace()).coerceAtLeast(0)
+        )
+        val rowItems = chips.take(visibleCount)
+            .map { it.measure(chipConstraints) } + listOfNotNull(moreChip)
+        val rowWidth = rowItems.sumOf { it.width } + spacing * (rowItems.size - 1).coerceAtLeast(0)
+        layout(constraints.constrainWidth(rowWidth), rowItems.maxOfOrNull { it.height } ?: 0) {
+            var x = 0
+            rowItems.forEach {
+                it.placeRelative(x, 0)
+                x += it.width + spacing
+            }
         }
     }
-    val chipHeight = CHIP_HEIGHT.dp.roundToPx()
-    val chipEnds = chips.runningFold(-spacing) { end, chip -> end + spacing + chip.maxIntrinsicWidth(chipHeight) }
-        .drop(1)
-
-    var visibleCount = chips.size
-    var moreChip: Placeable? = null
-    fun moreChipSpace() = moreChip?.let { spacing + it.width } ?: 0
-    while (visibleCount > 1 && chipEnds[visibleCount - 1] + moreChipSpace() > constraints.maxWidth) {
-        visibleCount--
-        val hiddenCount = chips.size - visibleCount
-        moreChip = subcompose(visibleCount) { MoreChip(hiddenCount) }.single().measure(looseConstraints)
-    }
-
-    val chipConstraints = looseConstraints.copy(maxWidth = (constraints.maxWidth - moreChipSpace()).coerceAtLeast(0))
-    val rowItems = chips.take(visibleCount).map { it.measure(chipConstraints) } + listOfNotNull(moreChip)
-    val rowWidth = rowItems.sumOf { it.width } + spacing * (rowItems.size - 1).coerceAtLeast(0)
-    layout(constraints.constrainWidth(rowWidth), rowItems.maxOfOrNull { it.height } ?: 0) {
-        var x = 0
-        rowItems.forEach {
-            it.placeRelative(x, 0)
-            x += it.width + spacing
-        }
-    }
-}
 
 @Composable
 private fun MoreChip(count: Int) = Box(
@@ -163,14 +173,20 @@ private fun MoreChip(count: Int) = Box(
 }
 
 @Composable
-private fun WindowChip(app: DisplayAppPreset, alwaysOnTop: Boolean, showCaption: Boolean, color: Color) = Row(
+private fun WindowChip(
+    app: DisplayAppPreset,
+    alwaysOnTop: Boolean,
+    showCaption: Boolean,
+    isMainWindow: Boolean,
+    color: Color
+) = Row(
     modifier = Modifier
         .height(CHIP_HEIGHT.dp)
         .clip(CircleShape)
         .background(color.copy(CHIP_BACKGROUND_ALPHA))
         .padding(
             start = chipStartInset(hasIcon = app.icon != null),
-            end = chipEndInset(hasIcon = app.autoPlay == true || alwaysOnTop || showCaption)
+            end = chipEndInset(hasIcon = app.autoPlay == true || alwaysOnTop || showCaption || isMainWindow)
         ),
     verticalAlignment = Alignment.CenterVertically
 ) {
@@ -204,6 +220,10 @@ private fun WindowChip(app: DisplayAppPreset, alwaysOnTop: Boolean, showCaption:
     if (alwaysOnTop) {
         Spacer(Modifier.width(iconGap))
         TextAlignedIcon(R.drawable.ic_pin, titleStyle, contentColor, widthEm = PIN_ICON_EM, heightEm = PIN_ICON_EM)
+    }
+    if (isMainWindow) {
+        Spacer(Modifier.width(iconGap))
+        TextAlignedIcon(R.drawable.ic_crown, titleStyle, contentColor, widthEm = PIN_ICON_EM, heightEm = PIN_ICON_EM)
     }
     if (showCaption) {
         Spacer(Modifier.width(iconGap))

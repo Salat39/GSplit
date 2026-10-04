@@ -31,6 +31,7 @@ import com.salat.settings.list.presentation.mappers.toUi
 import com.salat.settings.list.presentation.route.SplitListNavRoute
 import com.salat.split.list.BuildConfig
 import com.salat.splitlauncher.domain.entity.SplitLaunchSource
+import com.salat.splitlauncher.domain.usecases.GetMainWindowAvailableFlowUseCase
 import com.salat.splitlauncher.domain.usecases.GetNoCaptionWindowsFlowUseCase
 import com.salat.splitlauncher.domain.usecases.LaunchSplitUseCase
 import com.salat.splitpresets.domain.usecases.DeleteSplitPresetUseCase
@@ -81,7 +82,8 @@ class ListViewModel @Inject constructor(
     private val saveIntPrefUseCase: SaveIntPrefUseCase,
     private val adbConnectionStateUseCase: AdbConnectionStateUseCase,
     private val applyRequiredSystemSettingsUseCase: ApplyRequiredSystemSettingsUseCase,
-    private val getNoCaptionWindowsFlowUseCase: GetNoCaptionWindowsFlowUseCase
+    private val getNoCaptionWindowsFlowUseCase: GetNoCaptionWindowsFlowUseCase,
+    private val getMainWindowAvailableFlowUseCase: GetMainWindowAvailableFlowUseCase
 ) : BaseSyncViewModel<ListViewModel.ViewState, ListViewModel.Action>(
     ViewState(toolbarExtraSize = savedStateHandle.toRoute<SplitListNavRoute>().toolbarExtraSize)
 ) {
@@ -140,6 +142,10 @@ class ListViewModel @Inject constructor(
 
             launch {
                 getNoCaptionWindowsFlowUseCase.flow.collect { sendAction(Action.SetNoCaptionWindows(it)) }
+            }
+
+            launch {
+                getMainWindowAvailableFlowUseCase.flow.collect { sendAction(Action.SetMainWindowAvailable(it)) }
             }
 
             launch {
@@ -282,6 +288,8 @@ class ListViewModel @Inject constructor(
 
         is Action.SetNoCaptionWindows -> state.value.copy(noCaptionWindows = viewAction.value)
 
+        is Action.SetMainWindowAvailable -> state.value.copy(mainWindowAvailable = viewAction.value)
+
         is Action.SelectAdbPort -> {
             viewModelScope.launch(Dispatchers.IO) {
                 saveIntPrefUseCase.execute(IntPref.AdbHelperPort, viewAction.port)
@@ -362,6 +370,7 @@ class ListViewModel @Inject constructor(
         val quickSetupFinished: Boolean = false,
         val noCaptionWindows: Boolean = false,
         val nativeSplit: Boolean = false,
+        val mainWindowAvailable: Boolean = false,
         val reorderMode: Boolean = false
     ) : MviViewState
 
@@ -382,6 +391,7 @@ class ListViewModel @Inject constructor(
         internal class InitAdbPrefs(val enableAdbHelper: Boolean, val adbHelperPort: Int) : Action()
         internal class SetAdbConnectionState(val state: DisplayAdbState) : Action()
         internal class SetNoCaptionWindows(val value: Boolean) : Action()
+        internal class SetMainWindowAvailable(val value: Boolean) : Action()
         internal class SelectAdbPort(val port: Int) : Action()
         internal data object DisableAdb : Action()
         internal class RunQuickSetup(val packageName: String) : Action()

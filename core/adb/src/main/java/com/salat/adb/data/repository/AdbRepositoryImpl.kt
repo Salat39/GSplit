@@ -2,16 +2,20 @@ package com.salat.adb.data.repository
 
 import android.content.pm.PackageManager
 import android.graphics.Rect
+import android.os.Build
 import android.util.Base64
 import com.salat.adb.BuildConfig
 import com.salat.adb.data.entity.AdbConnectionState
 import com.salat.adb.data.entity.AdbRecentTaskInfo
+import com.salat.adb.data.entity.LegacyStack
 import com.salat.adb.data.entity.SHIZUKU_HELPER_PORT
 import com.salat.adb.data.entity.TELNET_HELPER_PORT
 import com.salat.adb.domain.repository.AdbRepository
 import com.salat.preferences.domain.DataStoreRepository
+import com.salat.preferences.domain.PreferencesRepository
 import com.salat.preferences.domain.entity.BoolPref
 import com.salat.preferences.domain.entity.IntPref
+import com.salat.preferences.domain.entity.PrivateStringSharedPref
 import com.tananaev.adblib.AdbBase64
 import com.tananaev.adblib.AdbConnection
 import com.tananaev.adblib.AdbCrypto
@@ -19,6 +23,13 @@ import com.tananaev.adblib.AdbStream
 import java.io.IOException
 import java.net.InetSocketAddress
 import java.net.Socket
+import java.security.KeyFactory
+import java.security.KeyPair
+import java.security.KeyPairGenerator
+import java.security.MessageDigest
+import java.security.spec.PKCS8EncodedKeySpec
+import java.security.spec.X509EncodedKeySpec
+import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -38,15 +49,23 @@ import kotlinx.coroutines.withTimeoutOrNull
 import rikka.shizuku.Shizuku
 import timber.log.Timber
 
-class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbRepository {
+class AdbRepositoryImpl(
+    private val dataStore: DataStoreRepository,
+    private val preferences: PreferencesRepository
+) : AdbRepository {
 
     companion object {
         private const val TIMEOUT_MS = 5_000
+        private const val AUTH_TIMEOUT_MS = 20_000L
         private const val RECONNECT_DELAY_MS = 3_000L
         private const val MAX_RECONNECT_RETRIES = 5
         private const val CONNECT_AWAIT_MS = 6_000L
         private const val NEW_TASK_LOOKUP_ATTEMPTS = 15
         private const val NEW_TASK_LOOKUP_INTERVAL_SEC = "0.05"
+        private const val MOVED_TO_WINDOW = "MOVED_TO_WINDOW"
+
+        // A removed task stays in the dump for a short time. The record of its finishing activity has the f mark
+        private const val SKIP_FINISHING_ACTIVITIES = "grep -v ' f}'"
 
         private const val DONE_PREFIX = "__ADB_DONE__:"
         private const val SHIZUKU_PERMISSION_REQUEST_CODE = 668
@@ -72,6 +91,8 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
     private var connectionEpoch: Long = 0L
 
     private val base64 = AdbBase64 { data -> Base64.encodeToString(data, Base64.NO_WRAP) }
+
+    private var savedCrypto: AdbCrypto? = null
     private val telnetDiscovery by lazy { TelnetShellDiscovery(::buildDoneMarker) }
 
     private val _connectionState =
@@ -97,6 +118,20 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
         pattern = """\bTask\{[^}]*#(\d+)\b""",
         options = setOf(RegexOption.MULTILINE)
     )
+
+    private val windowModeRegex = Regex(""" mode=(freeform|multi-window) """)
+
+    private val taskWindowingModeRegex = Regex(""" mode=([\w-]+) """)
+
+    // The pattern does not match a finishing root activity
+    private val rootActivityRegex = Regex("""Hist +#0: ActivityRecord\{[0-9a-f]+ u\d+ ([\w.]+)/[^ }]+\}? t(\d+)\}""")
+
+    private val launchedFromPackageRegex = Regex("""\blaunchedFromPackage=(\S+)""")
+
+    private val removedTaskRegex = Regex("""\bREMOVED=(\d+)""")
+
+    private val resizeModeRegex = Regex("""\bresizeMode=(\w+)""")
+    private val resizeableModes = setOf("RESIZE_MODE_RESIZEABLE", "RESIZE_MODE_RESIZEABLE_VIA_SDK_VERSION")
 
     private val foregroundPackageRegex = Regex(
         pattern = """\b([a-zA-Z0-9_]+(?:\.[a-zA-Z0-9_]+)+)(?=(?:/|\s|\}|,|\)|\]|$))"""
@@ -176,9 +211,8 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
                 val s = Socket()
                 s.connect(InetSocketAddress(host, port), TIMEOUT_MS)
 
-                val crypto: AdbCrypto = AdbCrypto.generateAdbKeyPair(base64)
-                val conn = AdbConnection.create(s, crypto)
-                conn.connect()
+                val conn = AdbConnection.create(s, adbCrypto())
+                conn.connectAuthorized(s)
 
                 // Do not publish connection if disconnect() happened during connect().
                 val canPublish = synchronized(connGuard) {
@@ -218,6 +252,61 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
                 false
             }
         }
+    }
+
+    // A saved key lets the user allow the app once. A storage error leaves a new key for each connection
+    private fun adbCrypto(): AdbCrypto {
+        savedCrypto?.let { return it }
+        loadSavedCrypto()?.let { crypto ->
+            savedCrypto = crypto
+            return crypto
+        }
+        val keyPair = runCatching {
+            KeyPairGenerator.getInstance("RSA").apply { initialize(AdbCrypto.KEY_LENGTH_BITS) }.generateKeyPair()
+        }.onFailure { Timber.e(it) }.getOrNull() ?: return AdbCrypto.generateAdbKeyPair(base64)
+        val crypto = AdbCrypto.loadAdbKeyPair(base64, keyPair)
+        if (saveKeyPair(keyPair)) savedCrypto = crypto
+        return crypto
+    }
+
+    private fun loadSavedCrypto(): AdbCrypto? = runCatching {
+        val privateKey = preferences.getValue(PrivateStringSharedPref.AdbPrivateKey) ?: return null
+        val publicKey = preferences.getValue(PrivateStringSharedPref.AdbPublicKey) ?: return null
+        if (preferences.getValue(PrivateStringSharedPref.AdbKeyFingerprint) != keyFingerprint(privateKey, publicKey)) {
+            Timber.w("[ADB] saved key fingerprint mismatch")
+            return null
+        }
+        val keyFactory = KeyFactory.getInstance("RSA")
+        val keyPair = KeyPair(
+            keyFactory.generatePublic(X509EncodedKeySpec(Base64.decode(publicKey, Base64.NO_WRAP))),
+            keyFactory.generatePrivate(PKCS8EncodedKeySpec(Base64.decode(privateKey, Base64.NO_WRAP)))
+        )
+        AdbCrypto.loadAdbKeyPair(base64, keyPair)
+    }.onFailure { Timber.e(it) }.getOrNull()
+
+    private fun saveKeyPair(keyPair: KeyPair): Boolean = runCatching {
+        val privateKey = Base64.encodeToString(keyPair.private.encoded, Base64.NO_WRAP)
+        val publicKey = Base64.encodeToString(keyPair.public.encoded, Base64.NO_WRAP)
+        preferences.setValues(
+            mapOf(
+                PrivateStringSharedPref.AdbPrivateKey to privateKey,
+                PrivateStringSharedPref.AdbPublicKey to publicKey,
+                PrivateStringSharedPref.AdbKeyFingerprint to keyFingerprint(privateKey, publicKey)
+            )
+        )
+    }.onFailure { Timber.e(it) }.getOrDefault(false)
+
+    private fun keyFingerprint(privateKey: String, publicKey: String) = MessageDigest.getInstance("SHA-256")
+        .digest("$privateKey:$publicKey".toByteArray())
+        .joinToString("") { "%02x".format(it) }
+
+    // Android 10 does not finish the connection after the user allows a new key. The saved key passes next time
+    private fun AdbConnection.connectAuthorized(socket: Socket) {
+        if (Build.VERSION.SDK_INT != Build.VERSION_CODES.Q) return connect()
+        if (connect(AUTH_TIMEOUT_MS, TimeUnit.MILLISECONDS, false)) return
+        runCatching { close() }
+        runCatching { socket.close() }
+        throw IOException("ADB authorization timeout")
     }
 
     /**
@@ -348,19 +437,16 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
         }
     }
 
-    override suspend fun isAppInFreeform(packageName: String): Boolean? {
+    override suspend fun isAppInWindow(packageName: String): Boolean? {
         val pkg = packageName.trim()
         if (pkg.isEmpty() || pkg.equals("unknown", ignoreCase = true) || !isValidPackageName(pkg)) {
             return false
         }
 
-        if (getTaskId(packageName) == null) return null
-
-        val r = execute(
-            "dumpsys activity activities | " +
-                "grep -i -E \"WindowingMode|mWindowingMode|windowingMode|$pkg\""
-        )
-        return r.contains("mode=freeform ")
+        val taskId = getTaskId(pkg) ?: return null
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return findLegacyStack(taskId)?.mode == "freeform"
+        val headers = execute("dumpsys activity activities | grep -E '\\* Task\\{[0-9a-f]+ #$taskId '")
+        return " mode=freeform " in headers || " mode=multi-window " in headers
     }
 
     override suspend fun isAppLaunched(packageName: String): Boolean {
@@ -377,18 +463,37 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
         }
     }
 
+    override suspend fun hasForegroundService(packageName: String): Boolean {
+        val pkg = packageName.trim()
+        if (pkg.isEmpty() || pkg.equals("unknown", ignoreCase = true) || !isValidPackageName(pkg)) {
+            return false
+        }
+
+        val componentPrefix = "$pkg/"
+        // The dump starts with the last ANR service of any package. The services of the package follow it
+        return execute("dumpsys activity services $componentPrefix")
+            .substringAfter("active services:", "")
+            .contains("isForeground=true")
+    }
+
     override suspend fun getTaskId(packageName: String): Int? {
         val pkg = packageName.trim()
         if (pkg.isEmpty() || pkg.equals("unknown", ignoreCase = true) || !isValidPackageName(pkg)) {
             return null
         }
-        return parseTaskId(execute("dumpsys activity activities | grep -E \"Task\\{.*$packageName|taskId=\""))
+        val rootActivities = execute("dumpsys activity activities | grep -E 'Hist +#0:' | $SKIP_FINISHING_ACTIVITIES")
+        return Regex(rootActivityPattern(pkg)).find(rootActivities)?.groupValues?.get(1)?.toIntOrNull()
     }
 
     private fun parseTaskId(dumpsysOutput: String): Int? {
         val m = taskIdRegex.find(dumpsysOutput) ?: return null
         return m.groupValues[1].toIntOrNull()
     }
+
+    // The root activity owns the task. The task affinity can differ from the package
+    // The pattern works in grep -E and in Regex. Android 13 and later add one more space after Hist
+    private fun rootActivityPattern(pkg: String) =
+        "Hist +#0: ActivityRecord\\{[0-9a-f]+ u[0-9]+ ${pkg.replace(".", "\\.")}/[^ }]+\\}? t([0-9]+)"
 
     /**
      * Convenience wrapper to force-stop a package via ActivityManager.
@@ -474,9 +579,72 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
     }
 
     override suspend fun minimize(taskId: Int) {
+        // Android 8 keeps all windows of one mode in one stack, so one window cannot close alone
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
         if (taskId == -1 || taskId == 0) return
-        execute("am stack remove $taskId")
+        // Android 9 and 10 remove a stack. A stack of another task must stay
+        val stackId = if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            findLegacyStack(taskId)?.takeIf { it.taskCount == 1 }?.id ?: return
+        } else taskId
+        execute("am stack remove $stackId")
     }
+
+    // An own window has a root activity that the owner app started, or its task id is in ownTaskIds
+    // A full screen task stays. The mode check and the removal are one shell command
+    override suspend fun removeOwnWindowTasks(
+        ownPackage: String,
+        ownTaskIds: Set<Int>,
+        keepPackages: Set<String>
+    ): Set<Int> {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return emptySet()
+        val dump = execute("dumpsys activity activities | grep -E '\\* Task\\{|Hist +#|launchedFromPackage='")
+        val windowTaskIds = mutableSetOf<Int>()
+        val rootPackages = mutableMapOf<Int, String>()
+        val rootLaunchers = mutableMapOf<Int, String>()
+        var rootTaskId: Int? = null
+        dump.lineSequence().forEach { line ->
+            when {
+                line.isTaskHeader() -> if (" type=standard " in line && windowModeRegex.containsMatchIn(line)) {
+                    parseTaskId(line)?.let(windowTaskIds::add)
+                }
+
+                "Hist " in line -> rootTaskId = rootActivityRegex.find(line)?.let { match ->
+                    match.groupValues[2].toInt().also { rootPackages[it] = match.groupValues[1] }
+                }
+
+                else -> rootTaskId?.let { taskId ->
+                    launchedFromPackageRegex.find(line)?.let { rootLaunchers[taskId] = it.groupValues[1] }
+                    rootTaskId = null
+                }
+            }
+        }
+
+        val ownWindowTaskIds = windowTaskIds.filter { taskId ->
+            val rootPackage = rootPackages[taskId] ?: return@filter false
+            rootPackage != ownPackage && rootPackage !in keepPackages &&
+                (rootLaunchers[taskId] == ownPackage || taskId in ownTaskIds)
+        }.toSet()
+        if (ownWindowTaskIds.isEmpty()) return emptySet()
+
+        val isWindow = "dumpsys activity activities | grep -E \"\\* Task\\{[0-9a-f]+ #\$i \" | head -n 1 | " +
+            "grep -qE ' mode=(freeform|multi-window) '"
+        val remove = "am stack remove \$i && echo REMOVED=\$i"
+        // A skipped task returns a non zero exit code. The final true keeps the output
+        val output = execute("for i in ${ownWindowTaskIds.joinToString(" ")}; do $isWindow && $remove; done; true")
+        return removedTaskRegex.findAll(output).map { it.groupValues[1].toInt() }.toSet()
+    }
+
+    // Android 9 and 10 show the windowing mode on the stack line and the stack id in the task line
+    private suspend fun findLegacyStack(taskId: Int): LegacyStack? {
+        val dump = execute("dumpsys activity activities | grep -E 'Stack #[0-9]+:|\\* TaskRecord\\{'")
+        val stackPattern = Regex("""\* TaskRecord\{[0-9a-f]+ #$taskId [^}]*StackId=(\d+)""")
+        val stackId = stackPattern.firstGroup(dump)?.toIntOrNull() ?: return null
+        val mode = Regex("""Stack #$stackId: type=standard mode=([\w-]+)""").firstGroup(dump) ?: return null
+        val taskCount = Regex("""\* TaskRecord\{[^}]*StackId=$stackId\b""").findAll(dump).count()
+        return LegacyStack(stackId, mode, taskCount)
+    }
+
+    private fun Regex.firstGroup(input: String) = find(input)?.groupValues?.get(1)
 
     override suspend fun ensureConnected(): Boolean {
         if (_connectionState.value is AdbConnectionState.Connected) return true
@@ -503,14 +671,95 @@ class AdbRepositoryImpl(private val dataStore: DataStoreRepository) : AdbReposit
     override suspend fun resizeNewTask(packageName: String, bounds: Rect): Boolean {
         val pkg = packageName.trim()
         if (pkg.isEmpty() || !isValidPackageName(pkg)) return false
-        val findTaskId = "dumpsys activity activities | grep -E 'Task\\{.*$pkg' | " +
-            "grep -o -E '#[0-9]+' | tr -d '#' | sort -n | tail -1"
+        val findTaskId = "dumpsys activity activities | grep -o -E '${rootActivityPattern(pkg)}' | " +
+            "grep -o -E '[0-9]+\$' | sort -n | tail -1"
         val resize = "am task resize \"\$i\" ${bounds.left} ${bounds.top} ${bounds.right} ${bounds.bottom}"
         val script = "n=0; r=; " +
             "while [ \$n -lt $NEW_TASK_LOOKUP_ATTEMPTS ]; do i=\$($findTaskId); " +
             "if [ -n \"\$i\" ]; then $resize && r=\$i; break; fi; " +
             "n=\$((n+1)); sleep $NEW_TASK_LOOKUP_INTERVAL_SEC; done; echo \"RESIZED=\$r\""
         return execute(script).contains(Regex("RESIZED=\\d+"))
+    }
+
+    override suspend fun getResizeableFullscreenTaskId(packageName: String): Int? {
+        val pkg = packageName.trim()
+        if (pkg.isEmpty() || pkg.equals("unknown", ignoreCase = true) || !isValidPackageName(pkg)) {
+            return null
+        }
+
+        val rootActivityRegex = Regex(rootActivityPattern(pkg))
+        val dump = execute(
+            "dumpsys activity activities | grep -E 'Task\\{|Hist +#|resizeMode=' | $SKIP_FINISHING_ACTIVITIES"
+        )
+        val taskBlock = dump.lines().splitTaskBlocks().firstOrNull { block ->
+            block.any { rootActivityRegex.containsMatchIn(it) }
+        } ?: return null
+        val header = taskBlock.first()
+        val isStandardFullscreen = " type=standard " in header && " mode=fullscreen " in header
+        val taskId = parseTaskId(header)?.takeIf { isStandardFullscreen } ?: return null
+
+        val resizeModes = taskBlock.mapNotNull { resizeModeRegex.find(it)?.groupValues?.get(1) }
+        return taskId.takeIf { resizeModes.isNotEmpty() && resizeModes.all { it in resizeableModes } }
+    }
+
+    private fun List<String>.splitTaskBlocks(): List<List<String>> {
+        val blocks = mutableListOf<MutableList<String>>()
+        forEach { line ->
+            if (line.isTaskHeader()) blocks.add(mutableListOf(line)) else blocks.lastOrNull()?.add(line)
+        }
+        return blocks
+    }
+
+    private fun String.isTaskHeader() = trimStart().startsWith("* Task{")
+
+    override suspend fun moveTaskToWindow(
+        taskId: Int,
+        windowingMode: Int,
+        bounds: Rect,
+        setWindowingModeCode: Int
+    ): Boolean {
+        if (taskId <= 0) return false
+        val isFullscreenTask = "dumpsys activity activities | grep -E '\\* Task\\{[0-9a-f]+ #$taskId ' | " +
+            "head -n 1 | grep -q ' type=standard mode=fullscreen '"
+        val script = "$isFullscreenTask && ${windowingModeScript(taskId, windowingMode, bounds, setWindowingModeCode)}"
+        return execute(script).contains(MOVED_TO_WINDOW)
+    }
+
+    override suspend fun getTaskWindowingMode(taskId: Int): String? {
+        if (taskId <= 0) return null
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return findLegacyStack(taskId)?.mode
+        val header = execute("dumpsys activity activities | grep -E '\\* Task\\{[0-9a-f]+ #$taskId ' | head -n 1")
+        return taskWindowingModeRegex.firstGroup(header)
+    }
+
+    override suspend fun setTaskWindowingMode(
+        taskId: Int,
+        windowingMode: Int,
+        bounds: Rect,
+        setWindowingModeCode: Int
+    ): Boolean {
+        if (taskId <= 0) return false
+        val script = windowingModeScript(taskId, windowingMode, bounds, setWindowingModeCode)
+        return execute(script).contains(MOVED_TO_WINDOW)
+    }
+
+    private fun windowingModeScript(taskId: Int, windowingMode: Int, bounds: Rect, setWindowingModeCode: Int): String {
+        val setWindowingMode = "service call activity_task $setWindowingModeCode i32 $taskId i32 $windowingMode i32 1"
+        val resize = "am task resize $taskId ${bounds.left} ${bounds.top} ${bounds.right} ${bounds.bottom}"
+        return "r=\$($setWindowingMode) && " +
+            "case \"\$r\" in *'Parcel(00000000 00000001'*) $resize && echo $MOVED_TO_WINDOW;; esac"
+    }
+
+    override suspend fun moveTaskToFullscreen(taskId: Int, setWindowingModeCode: Int): Boolean {
+        if (taskId <= 0) return false
+        val reply = execute("service call activity_task $setWindowingModeCode i32 $taskId i32 1 i32 1")
+        return reply.contains("Parcel(00000000 00000001")
+    }
+
+    override suspend fun focusTaskInBounds(taskId: Int, bounds: Rect): Boolean {
+        if (taskId <= 0) return false
+        val resize = "am task resize $taskId ${bounds.left} ${bounds.top} ${bounds.right} ${bounds.bottom}"
+        return execute("am task focus $taskId && $resize && echo FOCUSED").contains("FOCUSED")
     }
 
     @Suppress("ReturnCount")

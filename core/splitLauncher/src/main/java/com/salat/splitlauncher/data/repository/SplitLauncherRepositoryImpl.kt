@@ -23,8 +23,10 @@ import com.salat.mediamonitor.domain.repository.MediaMonitorRepository
 import com.salat.preferences.domain.DataStoreRepository
 import com.salat.preferences.domain.entity.BoolPref
 import com.salat.preferences.domain.entity.IntPref
+import com.salat.resources.R
 import com.salat.screenspecs.domain.repository.ScreenSpecsRepository
 import com.salat.splitlauncher.data.entity.AutoPlayConfig
+import com.salat.splitlauncher.data.entity.MainWindowSwitch
 import com.salat.splitlauncher.data.entity.WindowDirection
 import com.salat.splitlauncher.data.entity.WindowMode
 import com.salat.splitlauncher.data.entity.WindowType
@@ -39,10 +41,12 @@ import com.salat.statekeeper.domain.entity.LaunchedSplitType
 import com.salat.statekeeper.domain.entity.LaunchedWindowsConfig
 import com.salat.statekeeper.domain.entity.SplitLauncherEvent
 import com.salat.statekeeper.domain.repository.StateKeeperRepository
+import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.roundToInt
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -53,12 +57,15 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.lsposed.hiddenapibypass.HiddenApiBypass
 import presentation.sendMurglarAutoPlayCompat
 import presentation.sendPlayerAutoPlay
 import presentation.sendVkxAutoPlayCompat
 import presentation.sendYmAutoPlayCompat
+import presentation.toast
 import timber.log.Timber
 
 class SplitLauncherRepositoryImpl(
@@ -97,6 +104,39 @@ class SplitLauncherRepositoryImpl(
 
     private val multiWindowSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
 
+    private val taskResizeSupported = Build.VERSION.SDK_INT == Build.VERSION_CODES.R
+
+    // Android 10 restores the last window bounds of an app, so a restarted main window does not open full screen
+    private val mainWindowSupported = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P &&
+        Build.VERSION.SDK_INT != Build.VERSION_CODES.Q
+
+    override val mainWindowAvailableFlow = combine(
+        dataStore.getBooleanPrefFlow(BoolPref.EnableAdbHelper),
+        dataStore.getBooleanPrefFlow(BoolPref.EnableAdbForceStop),
+        dataStore.getBooleanPrefFlow(BoolPref.EnableAdbTaskResize)
+    ) { helper, forceStop, taskResize ->
+        helper && mainWindowSupported && (forceStop || (taskResize && taskResizeSupported))
+    }.stateIn(ioScope, SharingStarted.Eagerly, false)
+
+    // Each activation of a preset with the main window switches the state once, in the order of the taps
+    private val mainWindowMutex = Mutex()
+
+    // GSplit moved these tasks into its windows. The system does not show GSplit as the launcher of these tasks
+    private val adoptedWindowTaskIds: MutableSet<Int> = ConcurrentHashMap.newKeySet()
+
+    // The cleanup of an older split must not close the windows of a newer split
+    private val ownWindowsMutex = Mutex()
+
+    private val setTaskWindowingModeCode by lazy {
+        if (Build.VERSION.SDK_INT != Build.VERSION_CODES.R) return@lazy null
+        runCatching {
+            Class.forName("android.app.IActivityTaskManager\$Stub")
+                .getDeclaredField("TRANSACTION_setTaskWindowingMode")
+                .apply { isAccessible = true }
+                .getInt(null)
+        }.onFailure { Timber.e(it) }.getOrNull()
+    }
+
     private fun isNoCaptionWindowsActive(enabled: Boolean, connection: AdbConnectionState) =
         enabled && connection is AdbConnectionState.Connected && multiWindowSupported
 
@@ -117,6 +157,8 @@ class SplitLauncherRepositoryImpl(
 
     private var launchedFreeTask: SplitLaunchTask? = null
 
+    private var mainWindowTask: SplitLaunchTask? = null
+
     init {
         ioScope.launch {
             collectMediaState()
@@ -124,13 +166,134 @@ class SplitLauncherRepositoryImpl(
         }
     }
 
-    override suspend fun launchSplit(task: SplitLaunchTask, source: SplitLaunchSource) =
-        launchSplit(task, source, replacedFreeWindow = null)
+    override suspend fun launchSplit(task: SplitLaunchTask, source: SplitLaunchSource) {
+        // A preset without an available main window switch keeps the launch path without the queue
+        val isFree = task.type == SplitLaunchType.FREE
+        if (task.mainWindowPackage() == null || resolveMainWindowSwitch(isFree) == null) {
+            return launchSplit(task, source, replacedFreeWindow = null)
+        }
+        // The caller screen can close before a queued activation runs. The activation must not be cancelled
+        ioScope.async {
+            mainWindowMutex.withLock {
+                val session = stateKeeper.getLaunchedWindows()?.takeIf { it.isMainWindowSessionOf(task) }
+                val isAutoStart = source == SplitLaunchSource.AUTO_START
+                // Without ADB the open windows cannot move or come back, a relaunch opens them twice
+                if (session != null && !isAutoStart && !adbHelper.ensureConnected()) {
+                    withContext(Dispatchers.Main) {
+                        context.toast(context.getString(R.string.main_window_adb_required))
+                    }
+                    return@withLock
+                }
+                val isExpanded = session != null && !session.mainWindowExpanded && !isAutoStart &&
+                    expandMainWindow(session)
+                if (!isExpanded) launchSplit(task, source, replacedFreeWindow = null)
+            }
+        }.await()
+    }
 
+    private fun LaunchedWindowsConfig.isMainWindowSessionOf(task: SplitLaunchTask) =
+        isOpenMainWindowSessionOf(task.id) && mainWindowPackage == task.mainWindowPackage() &&
+            mainWindowTask?.windowLayout() == task.windowLayout()
+
+    // The accessibility service does not close the windows of this session before the next activation of the preset
+    private fun LaunchedWindowsConfig.isOpenMainWindowSessionOf(id: Long) = id != 0L && presetId == id &&
+        mainWindowPackage.isNotEmpty() && sessionId != stateKeeper.getClosedSessionId()
+
+    // Titles, autoplay and launch options do not change the windows of an open preset
+    private fun SplitLaunchTask.windowLayout() = copy(
+        firstApp = firstApp?.windowLayout(),
+        secondApp = secondApp?.windowLayout(),
+        autoStart = false,
+        darkBackground = false,
+        windows = windows.map { it.copy(app = it.app.windowLayout()) }
+    )
+
+    private fun SplitLaunchApp.windowLayout() = copy(title = "", autoPlay = null)
+
+    // A split with one app in two windows cannot tell which window is the main window
+    private fun SplitLaunchTask.mainWindowPackage(): String? {
+        val apps = if (type == SplitLaunchType.FREE) windows.map { it.app } else listOfNotNull(firstApp, secondApp)
+        val mainPackage = apps.firstOrNull { it.mainWindow }?.packageName
+        return mainPackage?.takeIf { pkg -> apps.count { it.packageName == pkg } == 1 }
+    }
+
+    private suspend fun resolveMainWindowSwitch(isFree: Boolean): MainWindowSwitch? {
+        val prefData = dataStore.getAnyPrefsFlow(
+            BoolPref.EnableAdbHelper,
+            BoolPref.EnableAdbTaskResize,
+            BoolPref.EnableAdbForceStop,
+            BoolPref.ExperimentalNativeSplit
+        ).firstOrNull() ?: return null
+        val nativeSplit = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && prefData[3] as Boolean && !isFree
+        return when {
+            !mainWindowSupported || !(prefData[0] as Boolean) || nativeSplit -> null
+            prefData[1] as Boolean && taskResizeSupported -> MainWindowSwitch.TASK_RESIZE
+            prefData[2] as Boolean -> MainWindowSwitch.RESTART
+            else -> null
+        }
+    }
+
+    // The other windows of the split stay open under the full screen main window
+    private suspend fun expandMainWindow(session: LaunchedWindowsConfig): Boolean {
+        val isExpanded = moveWindowToFullscreen(session.mainWindowPackage, session.type == LaunchedSplitType.FREE)
+        if (isExpanded) stateKeeper.setLaunchedWindows(session.copy(mainWindowExpanded = true))
+        return isExpanded
+    }
+
+    // Returns false when the app has no window or the settings do not allow the move
+    private suspend fun moveWindowToFullscreen(packageName: String, isFree: Boolean): Boolean {
+        val switch = resolveMainWindowSwitch(isFree)
+        val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName)
+        if (switch == null || launchIntent == null || !adbHelper.ensureConnected() ||
+            adbHelper.isAppInWindow(packageName) != true
+        ) {
+            return false
+        }
+
+        bypassHiddenApiRestrictions()
+        val code = setTaskWindowingModeCode.takeIf { switch == MainWindowSwitch.TASK_RESIZE }
+        val taskId = code?.let { adbHelper.getTaskId(packageName) }
+        val isMoved = code != null && taskId != null && adbHelper.moveTaskToFullscreen(taskId, code)
+        return isMoved || restartInFullscreen(packageName, launchIntent)
+    }
+
+    private suspend fun restartInFullscreen(packageName: String, launchIntent: Intent): Boolean {
+        restartApps(listOf(packageName))
+        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val options = ActivityOptions.makeCustomAnimation(context, 0, 0)
+            .setLaunchWindowingMode(WindowMode.FULLSCREEN.id)
+        return withContext(Dispatchers.Main) {
+            try {
+                context.startActivity(launchIntent, options.toBundle())
+                true
+            } catch (e: Exception) {
+                Timber.e(e)
+                false
+            }
+        }
+    }
+
+    // The accessibility service keeps the session windows until the placed signal. A failed launch sends it too
     private suspend fun launchSplit(
         task: SplitLaunchTask,
         source: SplitLaunchSource,
         replacedFreeWindow: SplitLaunchWindow?
+    ) {
+        val sessionId = System.currentTimeMillis()
+        try {
+            launchSplitSession(task, source, replacedFreeWindow, sessionId)
+        } finally {
+            if (stateKeeper.getLaunchedWindows()?.sessionId == sessionId) {
+                stateKeeper.setPlacedWindowsSessionId(sessionId)
+            }
+        }
+    }
+
+    private suspend fun launchSplitSession(
+        task: SplitLaunchTask,
+        source: SplitLaunchSource,
+        replacedFreeWindow: SplitLaunchWindow?,
+        sessionId: Long
     ) {
         val isFree = task.type == SplitLaunchType.FREE
         // Pinned windows start last. The window tracking expects the last launched window on top
@@ -151,7 +314,7 @@ class SplitLauncherRepositoryImpl(
                 bottomWindowShift = false,
                 type = task.type.toLaunchedType(),
                 presetId = task.id,
-                sessionId = System.currentTimeMillis(),
+                sessionId = sessionId,
                 freeWindowPackages = freeWindows.map { it.app.packageName },
                 freePresetWindowPackages = task.windows.map { it.app.packageName }
             )
@@ -169,12 +332,38 @@ class SplitLauncherRepositoryImpl(
                 bottomWindowShift = shiftBottomWindow,
                 type = task.type.toLaunchedType(),
                 presetId = task.id,
-                sessionId = System.currentTimeMillis(),
+                sessionId = sessionId,
                 ratio = task.ratio
             )
         }
-        stateKeeper.setLaunchedWindows(launchConfig)
+        // The replacement task of a split window has only the new app
+        val isWindowReplacement = if (isFree) {
+            replacedFreeWindow != null
+        } else task.firstApp == null || task.secondApp == null
+        val previousConfig = stateKeeper.getLaunchedWindows()
+        val sessionPackages = if (isFree) {
+            launchConfig.freeWindowPackages
+        } else listOf(launchConfig.firstAppPackage, launchConfig.secondAppPackage)
+        val keepsExpandedMainWindow = isWindowReplacement && previousConfig?.mainWindowExpanded == true &&
+            previousConfig.mainWindowPackage.let { it.isEmpty() || it in sessionPackages }
+        // A replaced window keeps the quick split while the open app stays in the split
+        val quickSplitOpenPackage = task.quickSplitOpenPackage.ifEmpty {
+            previousConfig?.quickSplitOpenPackage?.takeIf { isWindowReplacement && it in sessionPackages }.orEmpty()
+        }
+        // A replaced window changes the preset layout, so the next activation launches the saved preset again
+        val mainWindowPackage = task.mainWindowPackage()
+            ?.takeIf { replacedFreeWindow == null && resolveMainWindowSwitch(isFree) != null }
+        ownWindowsMutex.withLock {
+            stateKeeper.setLaunchedWindows(
+                launchConfig.copy(
+                    mainWindowPackage = mainWindowPackage.orEmpty(),
+                    mainWindowExpanded = keepsExpandedMainWindow,
+                    quickSplitOpenPackage = quickSplitOpenPackage
+                )
+            )
+        }
         launchedFreeTask = task.takeIf { isFree }
+        mainWindowTask = task.takeIf { mainWindowPackage != null }
         saveLastLaunchedTask(task)
 
         bypassHiddenApiRestrictions()
@@ -196,7 +385,9 @@ class SplitLauncherRepositoryImpl(
             BoolPref.AutoRefocusWhenBottomWindowShift,
             BoolPref.EnableAdbHelper,
             BoolPref.EnableAdbForceStop,
-            BoolPref.ExternalAppEventSync
+            BoolPref.ExternalAppEventSync,
+            BoolPref.EnableAdbTaskResize,
+            BoolPref.CloseOldSplitWindows
         ).firstOrNull() ?: return
 
         val bypassDelay = (prefData[0] as Int).toLong()
@@ -215,17 +406,35 @@ class SplitLauncherRepositoryImpl(
         val enableAdbHelper = prefData[13] as Boolean
         val enableAdbForceStop = prefData[14] as Boolean
         val externalAppEventSync = prefData[15] as Boolean
+        val enableAdbTaskResize = prefData[16] as Boolean
+        val closesOldWindows = prefData[17] as Boolean
 
-        // Force stop via ADB helper
-        if (enableAdbHelper && enableAdbForceStop) {
-            val targetPkg = launchApps
-                .map { it.packageName }
-                .filter { adbHelper.isAppInFreeform(it) == false }
-                .toSet()
-                .toTypedArray()
-            adbHelper.forceStop(*targetPkg)
+        val nativeSplit = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && experimentalNativeSplit && !isFree &&
+            task.quickSplitOpenPackage.isEmpty()
+        val setWindowingModeCode = setTaskWindowingModeCode.takeIf { enableAdbTaskResize && !nativeSplit }
 
-            delay(50L)
+        val movesFullscreenApps = enableAdbHelper && (enableAdbForceStop || setWindowingModeCode != null)
+        // The open windows of a preset with the main window come back as they are. A new task would duplicate them
+        val reusesOpenWindows = mainWindowPackage != null || previousConfig?.isOpenMainWindowSessionOf(task.id) == true
+        val isAdbReady = (movesFullscreenApps || reusesOpenWindows) && adbHelper.ensureConnected()
+        val windowStates = if (isAdbReady) {
+            launchApps.map { it.packageName }.distinct().associateWith { adbHelper.isAppInWindow(it) }
+        } else emptyMap()
+
+        // Move or restart full screen apps via ADB helper
+        var windowTaskIds = emptyMap<String, Int>()
+        if (movesFullscreenApps && isAdbReady) {
+            val fullScreenPkgs = windowStates.filterValues { it == false }.keys
+            if (setWindowingModeCode != null) {
+                // The always on top flag applies only at launch
+                val pinnedPkgs = startedFreeWindows.filter { isFree && it.alwaysOnTop }.map { it.app.packageName }
+                // One task cannot fill two windows
+                val repeatedPkgs = launchApps.groupingBy { it.packageName }.eachCount().filterValues { it > 1 }.keys
+                windowTaskIds = (fullScreenPkgs - pinnedPkgs.toSet() - repeatedPkgs).mapNotNull { pkg ->
+                    adbHelper.getResizeableFullscreenTaskId(pkg)?.let { pkg to it }
+                }.toMap()
+            }
+            restartApps(fullScreenPkgs - windowTaskIds.keys)
 
             // Soft stop
         } else if (softKillApp) {
@@ -233,8 +442,14 @@ class SplitLauncherRepositoryImpl(
             delay(50L)
         }
 
+        val openWindowTaskIds = if (reusesOpenWindows) {
+            windowStates.filterValues { it == true }.keys
+                .mapNotNull { pkg -> adbHelper.getTaskId(pkg)?.let { pkg to it } }
+                .toMap()
+        } else emptyMap()
+
         // Experimental native split method via Accessibility API
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && experimentalNativeSplit && !isFree) {
+        if (nativeSplit) {
             withContext(Dispatchers.Main) { launchNativeSplit(task) }
             stateKeeper.setPlacedWindowsSessionId(launchConfig.sessionId)
             _splitStartedFlow.emit(Pair(source, task))
@@ -253,6 +468,10 @@ class SplitLauncherRepositoryImpl(
             _darkBackgroundFlow.emit(hideByCloseDarkScreen)
         }
 
+        if (closesOldWindows && enableAdbHelper && multiWindowSupported && adbHelper.ensureConnected()) {
+            closeOldSplitWindows(sessionId, sessionPackages)
+        }
+
         _freeformHackFlow.emit(true)
 
         delay(bypassDelay)
@@ -263,11 +482,20 @@ class SplitLauncherRepositoryImpl(
             listOf(WindowDirection.SECOND, WindowDirection.FIRST)
         } else listOf(WindowDirection.FIRST, WindowDirection.SECOND)
 
-        val playBetweenWindows = ymCompatMode && shiftBottomWindow && !autoRefocusWithBottomWindowShift &&
-            task.secondApp?.packageName == YAM_PACKAGE && task.secondApp.autoPlay == true
+        // The open windows keep their playback state
+        val playBetweenWindows = YAM_PACKAGE !in openWindowTaskIds && ymCompatMode && shiftBottomWindow &&
+            !autoRefocusWithBottomWindowShift && task.secondApp?.packageName == YAM_PACKAGE &&
+            task.secondApp.autoPlay == true
 
         if (isFree) {
-            launchFreeWindows(startedFreeWindows, heightCorrector, secondWindowDelay, noCaptionWindows)
+            launchFreeWindows(
+                startedFreeWindows,
+                heightCorrector,
+                secondWindowDelay,
+                noCaptionWindows,
+                windowTaskIds,
+                openWindowTaskIds
+            )
         } else {
             var isFirst = true
             windowsDirection.forEach { windowType ->
@@ -302,7 +530,9 @@ class SplitLauncherRepositoryImpl(
                                 customRatio = task.ratio,
                                 bottomWindowShift = bottomWindowShift,
                                 heightCorrector = heightCorrector,
-                                noCaption = noCaptionWindows && !app.withCaption
+                                noCaption = noCaptionWindows && !app.withCaption,
+                                fullscreenTaskId = windowTaskIds[app.packageName],
+                                openWindowTaskId = openWindowTaskIds[app.packageName]
                             )
                         }
 
@@ -329,7 +559,9 @@ class SplitLauncherRepositoryImpl(
                                 customRatio = task.ratio,
                                 bottomWindowShift = bottomWindowShift,
                                 heightCorrector = heightCorrector,
-                                noCaption = noCaptionWindows && !app.withCaption
+                                noCaption = noCaptionWindows && !app.withCaption,
+                                fullscreenTaskId = windowTaskIds[app.packageName],
+                                openWindowTaskId = openWindowTaskIds[app.packageName]
                             )
                         }
                         isFirst = false
@@ -347,7 +579,7 @@ class SplitLauncherRepositoryImpl(
         // Notify external apps
         if (externalAppEventSync) sendInitSplitBroadcast(task)
 
-        val autoPlayApps = launchApps.filter { it.autoPlay == true }
+        val autoPlayApps = launchApps.filter { it.autoPlay == true && it.packageName !in openWindowTaskIds }
         if (!playBetweenWindows && autoPlayApps.isNotEmpty()) {
             val autoPlayConfig = AutoPlayConfig(
                 ymCompatMode = ymCompatMode,
@@ -380,6 +612,18 @@ class SplitLauncherRepositoryImpl(
         firebase.logOpenPreset(firebaseLogData)
     }
 
+    // Old windows of GSplit stay under the new windows and show again after the split closes
+    private suspend fun closeOldSplitWindows(sessionId: Long, sessionPackages: List<String>) =
+        ownWindowsMutex.withLock {
+            if (stateKeeper.getLaunchedWindows()?.sessionId != sessionId) return@withLock
+            val closedTaskIds = adbHelper.removeOwnWindowTasks(
+                ownPackage = context.packageName,
+                ownTaskIds = adoptedWindowTaskIds.toSet(),
+                keepPackages = sessionPackages.toSet()
+            )
+            adoptedWindowTaskIds.removeAll(closedTaskIds)
+        }
+
     /**
      * Launches an application by its packageName in a window with specified dimensions.
      *
@@ -398,7 +642,9 @@ class SplitLauncherRepositoryImpl(
         customRatio: Float,
         bottomWindowShift: Int,
         heightCorrector: Int,
-        noCaption: Boolean = false
+        noCaption: Boolean = false,
+        fullscreenTaskId: Int? = null,
+        openWindowTaskId: Int? = null
     ) {
         // Calculate status bar height
         val statusBarHeight = screenSpecs.getStatusBarHeight()
@@ -633,14 +879,23 @@ class SplitLauncherRepositoryImpl(
             }
         }
 
-        startAppInBounds(context, packageName, bounds, noCaption = noCaption)
+        startAppInBounds(
+            context,
+            packageName,
+            bounds,
+            noCaption = noCaption,
+            fullscreenTaskId = fullscreenTaskId,
+            openWindowTaskId = openWindowTaskId
+        )
     }
 
     private suspend fun launchFreeWindows(
         windows: List<SplitLaunchWindow>,
         heightCorrector: Int,
         windowDelay: Long,
-        noCaption: Boolean
+        noCaption: Boolean,
+        windowTaskIds: Map<String, Int>,
+        openWindowTaskIds: Map<String, Int>
     ) {
         val statusBarHeight = screenSpecs.getStatusBarHeight()
         val (leftInset, _) = screenSpecs.getScreenHorizontalInsets()
@@ -656,7 +911,15 @@ class SplitLauncherRepositoryImpl(
             )
             // A pinned window keeps the caption. The user moves and closes the window with the caption
             val windowNoCaption = noCaption && !window.alwaysOnTop && !window.app.withCaption
-            startAppInBounds(context, window.app.packageName, bounds, window.alwaysOnTop, windowNoCaption)
+            startAppInBounds(
+                context,
+                window.app.packageName,
+                bounds,
+                window.alwaysOnTop,
+                windowNoCaption,
+                windowTaskIds[window.app.packageName],
+                openWindowTaskIds[window.app.packageName]
+            )
             delay(windowDelay)
         }
     }
@@ -666,22 +929,63 @@ class SplitLauncherRepositoryImpl(
         packageName: String,
         bounds: Rect,
         alwaysOnTop: Boolean = false,
-        noCaption: Boolean = false
+        noCaption: Boolean = false,
+        fullscreenTaskId: Int? = null,
+        openWindowTaskId: Int? = null
     ) {
+        // Multi-window mode has no caption but ignores launch bounds - the task gets its bounds through ADB after start
+        val windowMode = if (noCaption) WindowMode.MULTI_WINDOW else WindowMode.FREEFORM
+        // An unknown task mode keeps the task as it is. Only a known other mode changes or recreates the window
+        val taskMode = openWindowTaskId?.takeUnless { alwaysOnTop }?.let { adbHelper.getTaskWindowingMode(it) }
+        val keepsWindowMode = openWindowTaskId != null && !alwaysOnTop &&
+            (taskMode == null || taskMode == windowMode.dumpName)
+        // A launch intent can clear the activities above a single task root activity. The task comes to front as is
+        if (openWindowTaskId != null) {
+            val isReused = if (keepsWindowMode) {
+                adbHelper.focusTaskInBounds(openWindowTaskId, bounds)
+            } else {
+                !alwaysOnTop && setTaskWindowingModeCode?.let {
+                    adbHelper.setTaskWindowingMode(openWindowTaskId, windowMode.id, bounds, it)
+                } == true
+            }
+            if (isReused) {
+                adoptedWindowTaskIds += openWindowTaskId
+                return
+            }
+            // A pinned window or a window mode that cannot change needs a new task
+            if (!keepsWindowMode) restartApps(listOf(packageName))
+        }
+        val reusedTaskId = openWindowTaskId?.takeIf { keepsWindowMode }
+
+        if (fullscreenTaskId != null) {
+            val moved = setTaskWindowingModeCode?.let {
+                adbHelper.moveTaskToWindow(fullscreenTaskId, windowMode.id, bounds, it)
+            } == true
+            if (moved) {
+                adoptedWindowTaskIds += fullscreenTaskId
+                return
+            }
+            Timber.e("Task of $packageName did not move into the window, the app restarts")
+            restartApps(listOf(packageName))
+        }
+
         val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName)
         if (launchIntent == null) {
             Timber.d("Application not found")
             return
         }
         launchIntent.addCategory(Intent.CATEGORY_LAUNCHER)
+        // Without the multiple task flag the system brings the open window to front instead of a second window
         launchIntent.addFlags(
-            Intent.FLAG_ACTIVITY_NEW_TASK or
-                Intent.FLAG_ACTIVITY_MULTIPLE_TASK or
-                Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT
+            if (reusedTaskId != null) {
+                Intent.FLAG_ACTIVITY_NEW_TASK
+            } else {
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_ACTIVITY_MULTIPLE_TASK or
+                    Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT
+            }
         )
 
-        // Multi-window mode has no caption but ignores launch bounds - the task gets its bounds through ADB after start
-        val windowMode = if (noCaption) WindowMode.MULTI_WINDOW else WindowMode.FREEFORM
         try {
             val options = ActivityOptions
                 .makeCustomAnimation(context, 0, 0)
@@ -704,28 +1008,26 @@ class SplitLauncherRepositoryImpl(
         }
     }
 
+    // The system keeps the process with a foreground service after task removal, so the playback continues
+    private suspend fun restartApps(packageNames: Collection<String>) {
+        if (packageNames.isEmpty()) return
+        val (taskRemovalPkgs, forceStopPkgs) = packageNames.partition {
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && adbHelper.hasForegroundService(it)
+        }
+        taskRemovalPkgs.forEach { pkg -> adbHelper.getTaskId(pkg)?.let { adbHelper.minimize(it) } }
+        adbHelper.forceStop(*forceStopPkgs.toTypedArray())
+
+        delay(if (taskRemovalPkgs.isEmpty()) 50L else 150L)
+    }
+
     private fun saveLastLaunchedTask(task: SplitLaunchTask) = ioScope.launch {
         val isFullTask = task.firstApp?.packageName?.isNotEmpty() == true &&
             task.secondApp?.packageName?.isNotEmpty() == true
         if (task.type == SplitLaunchType.FREE || isFullTask) {
             launchHistory.saveLastConfig(task.toLastLaunchedTask())
         } else {
-            val firstApp = if (task.firstApp?.packageName?.isNotEmpty() == true) {
-                LastLaunchedApp(
-                    title = task.firstApp.title,
-                    packageName = task.firstApp.packageName,
-                    autoPlay = task.firstApp.autoPlay,
-                    withCaption = task.firstApp.withCaption
-                )
-            } else null
-            val secondApp = if (task.secondApp?.packageName?.isNotEmpty() == true) {
-                LastLaunchedApp(
-                    title = task.secondApp.title,
-                    packageName = task.secondApp.packageName,
-                    autoPlay = task.secondApp.autoPlay,
-                    withCaption = task.secondApp.withCaption
-                )
-            } else null
+            val firstApp = task.firstApp?.takeIf { it.packageName.isNotEmpty() }?.toLastLaunchedApp()
+            val secondApp = task.secondApp?.takeIf { it.packageName.isNotEmpty() }?.toLastLaunchedApp()
             launchHistory.patchLastConfig(firstApp, secondApp)
         }
     }
@@ -760,12 +1062,16 @@ class SplitLauncherRepositoryImpl(
 
     /**
      * Invokes the method to bypass hidden API restrictions.
-     * Adds exemptions for the ActivityOptions class to allow the use of setLaunchBounds.
+     * Adds exemptions for the ActivityOptions class to allow the use of setLaunchBounds
+     * and for the IActivityTaskManager.Stub class to read the setTaskWindowingMode transaction code.
      */
     private fun bypassHiddenApiRestrictions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
             // For example, allowing access to the ActivityOptions class API
-            val result = HiddenApiBypass.addHiddenApiExemptions("Landroid/app/ActivityOptions;")
+            val result = HiddenApiBypass.addHiddenApiExemptions(
+                "Landroid/app/ActivityOptions;",
+                "Landroid/app/IActivityTaskManager\$Stub;"
+            )
             Timber.d("Hidden API bypass result: $result")
         }
     }
@@ -845,6 +1151,8 @@ class SplitLauncherRepositoryImpl(
                         )
                     }
                 }
+
+                is SplitLauncherEvent.MoveToFullscreen -> moveWindowToFullscreen(event.packageName, isFree = false)
             }
         }
     }
@@ -1019,7 +1327,8 @@ class SplitLauncherRepositoryImpl(
             bottomWindowShift = this.bottomWindowShift,
             id = this.id,
             windows = this.windows.map { it.toLastLaunchedWindow() },
-            ratio = this.ratio
+            ratio = this.ratio,
+            quickSplitOpenPackage = this.quickSplitOpenPackage
         )
     }
 
@@ -1036,7 +1345,8 @@ class SplitLauncherRepositoryImpl(
         title = this.title,
         packageName = this.packageName,
         autoPlay = this.autoPlay,
-        withCaption = this.withCaption
+        withCaption = this.withCaption,
+        mainWindow = this.mainWindow
     )
 
     private fun SplitLaunchType.toLastLaunchedType() = LastLaunchedType.entries.first { it.id == this.id }

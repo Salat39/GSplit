@@ -22,11 +22,11 @@ fun RatioGlyph(
     modifier: Modifier = Modifier,
     length: Dp = 24.dp,
     firstActive: Boolean = true,
-    secondActive: Boolean = true
+    secondActive: Boolean = true,
+    firstColor: Color = AppTheme.colors.addWindowFirstAccent,
+    secondColor: Color = AppTheme.colors.addWindowSecondAccent,
+    inactiveColor: Color = AppTheme.colors.contentPrimary.copy(.3f)
 ) {
-    val firstColor = AppTheme.colors.addWindowFirstAccent
-    val secondColor = AppTheme.colors.addWindowSecondAccent
-    val inactiveColor = AppTheme.colors.contentPrimary.copy(.3f)
     val thickness = length * 2 / 3
     Canvas(modifier.size(if (isLandscape) DpSize(length, thickness) else DpSize(thickness, length))) {
         val gap = (length / 12).toPx()

@@ -9,12 +9,16 @@ import com.salat.preferences.domain.entity.BoolPref
 import com.salat.preferences.domain.entity.FloatPref
 import com.salat.preferences.domain.usecases.FlowPrefsUseCase
 import com.salat.preferences.domain.usecases.LoadFloatPrefUseCase
+import com.salat.preferences.domain.usecases.SaveBoolPrefUseCase
+import com.salat.preferences.domain.usecases.SaveFloatPrefUseCase
 import com.salat.settings.add.presentation.entity.DeviceAppInfo
 import com.salat.settings.add.presentation.entity.DisplayFreeWindow
 import com.salat.settings.add.presentation.entity.SizeFormat
+import com.salat.settings.add.presentation.entity.presetFormatOf
 import com.salat.settings.add.presentation.mappers.toDisplay
 import com.salat.settings.add.presentation.mappers.toDomainPreset
 import com.salat.settings.add.presentation.route.SplitAddNavRoute
+import com.salat.splitlauncher.domain.usecases.GetMainWindowAvailableFlowUseCase
 import com.salat.splitlauncher.domain.usecases.GetNoCaptionWindowsFlowUseCase
 import com.salat.splitpresets.domain.entity.PresetType
 import com.salat.splitpresets.domain.usecases.AddSplitPresetUseCase
@@ -32,6 +36,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import presentation.BaseSyncViewModel
@@ -50,7 +55,10 @@ class AddViewModel @Inject constructor(
     private val getPresetFreeIdUseCase: GetPresetFreeIdUseCase,
     private val loadFloatPrefUseCase: LoadFloatPrefUseCase,
     private val flowPrefsUseCase: FlowPrefsUseCase,
-    private val getNoCaptionWindowsFlowUseCase: GetNoCaptionWindowsFlowUseCase
+    private val getNoCaptionWindowsFlowUseCase: GetNoCaptionWindowsFlowUseCase,
+    private val getMainWindowAvailableFlowUseCase: GetMainWindowAvailableFlowUseCase,
+    private val saveFloatPrefUseCase: SaveFloatPrefUseCase,
+    private val saveBoolPrefUseCase: SaveBoolPrefUseCase
 ) : BaseSyncViewModel<AddViewModel.ViewState, AddViewModel.Action>(
     savedStateHandle.toRoute<SplitAddNavRoute>().let { data ->
         data.type?.let { type ->
@@ -60,7 +68,7 @@ class AddViewModel @Inject constructor(
                 freeMode = type == PresetType.FREE.id,
                 isFreePresetEdit = data.editId != null && type == PresetType.FREE.id
             )
-        } ?: ViewState()
+        } ?: ViewState(quickSplit = data.quickSplit)
     }
 ) {
     private val _uiScaleState = MutableStateFlow(1f)
@@ -87,14 +95,24 @@ class AddViewModel @Inject constructor(
                 }
             }
 
-            launch {
-                val installedApps = findAllInstalledAppsUseCase.execute().toDisplay()
-                sendAction(Action.SetDeviceApps(installedApps))
+            if (navData.quickSplit) {
+                launch { loadQuickSplitDefaults() }
+            } else {
+                launch {
+                    val installedApps = findAllInstalledAppsUseCase.execute().toDisplay()
+                    sendAction(Action.SetDeviceApps(installedApps))
+                }
             }
 
             launch {
                 getNoCaptionWindowsFlowUseCase.flow.collect {
                     sendAction(Action.SetWindowTypeAvailable(it))
+                }
+            }
+
+            launch {
+                getMainWindowAvailableFlowUseCase.flow.collect {
+                    sendAction(Action.SetMainWindowAvailable(it))
                 }
             }
 
@@ -110,6 +128,23 @@ class AddViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    private suspend fun loadQuickSplitDefaults() {
+        val prefs = flowPrefsUseCase.execute(
+            FloatPref.QuickSplitRatio,
+            BoolPref.QuickSplitInsertFirst,
+            BoolPref.QuickSplitFirstCaption,
+            BoolPref.QuickSplitSecondCaption
+        ).firstOrNull() ?: return
+        sendAction(
+            Action.SetQuickSplitData(
+                ratio = prefs[0] as Float,
+                insertFirst = prefs[1] as Boolean,
+                firstCaption = prefs[2] as Boolean,
+                secondCaption = prefs[3] as Boolean
+            )
+        )
     }
 
     private fun CoroutineScope.catchEditItemTask() = launch {
@@ -151,12 +186,22 @@ class AddViewModel @Inject constructor(
         Action.ShowPresets -> state.value.copy(splitForm = state.value.customRatio.nearestPresetFormat())
 
         is Action.SetDeviceApps -> state.value.copy(deviceApps = viewAction.apps)
-        is Action.SetBottomApp -> state.value.copy(
-            bottomApp = viewAction.app?.copy(withCaption = state.value.bottomApp?.withCaption ?: false)
+        is Action.SetBottomApp -> if (viewAction.app.isSameApp(state.value.topApp)) {
+            state.value
+        } else state.value.copy(
+            bottomApp = viewAction.app?.copy(
+                withCaption = state.value.bottomApp?.withCaption ?: false,
+                mainWindow = state.value.bottomApp?.mainWindow ?: false
+            )
         )
 
-        is Action.SetTopApp -> state.value.copy(
-            topApp = viewAction.app?.copy(withCaption = state.value.topApp?.withCaption ?: false)
+        is Action.SetTopApp -> if (viewAction.app.isSameApp(state.value.bottomApp)) {
+            state.value
+        } else state.value.copy(
+            topApp = viewAction.app?.copy(
+                withCaption = state.value.topApp?.withCaption ?: false,
+                mainWindow = state.value.topApp?.mainWindow ?: false
+            )
         )
 
         is Action.SetTopWithCaption -> state.value.copy(
@@ -168,6 +213,34 @@ class AddViewModel @Inject constructor(
         )
 
         is Action.SetWindowTypeAvailable -> state.value.copy(isWindowTypeAvailable = viewAction.value)
+
+        is Action.SetMainWindowAvailable -> state.value.copy(isMainWindowAvailable = viewAction.value)
+
+        Action.ToggleTopMainWindow -> state.value.run {
+            val enabled = topApp?.mainWindow != true
+            copy(
+                topApp = topApp?.copy(mainWindow = enabled),
+                bottomApp = if (enabled) bottomApp?.copy(mainWindow = false) else bottomApp
+            )
+        }
+
+        Action.ToggleBottomMainWindow -> state.value.run {
+            val enabled = bottomApp?.mainWindow != true
+            copy(
+                topApp = if (enabled) topApp?.copy(mainWindow = false) else topApp,
+                bottomApp = bottomApp?.copy(mainWindow = enabled)
+            )
+        }
+
+        is Action.SetFreeMainWindow -> state.value.copy(
+            freeWindows = state.value.freeWindows.map { window ->
+                when {
+                    window.id == viewAction.id -> window.copy(app = window.app.copy(mainWindow = viewAction.enabled))
+                    viewAction.enabled -> window.copy(app = window.app.copy(mainWindow = false))
+                    else -> window
+                }
+            }
+        )
 
         is Action.SetWindowTypePrefs -> state.value.copy(
             isNativeSplitEnabled = viewAction.isNativeSplitEnabled,
@@ -224,6 +297,53 @@ class AddViewModel @Inject constructor(
         is Action.RemoveFreeWindow -> state.value.copy(
             freeWindows = state.value.freeWindows.filterNot { it.id == viewAction.id }
         )
+
+        is Action.SetQuickSplitData -> state.value.copy(
+            splitForm = presetFormatOf(viewAction.ratio) ?: SizeFormat.CUSTOM,
+            customRatio = viewAction.ratio,
+            quickSplitInsertFirst = viewAction.insertFirst,
+            quickSplitFirstCaption = viewAction.firstCaption,
+            quickSplitSecondCaption = viewAction.secondCaption
+        )
+
+        is Action.SetQuickSplitInsertFirst -> state.value.copy(quickSplitInsertFirst = viewAction.value)
+
+        is Action.SetQuickSplitCaption -> if (viewAction.isFirst) {
+            state.value.copy(quickSplitFirstCaption = viewAction.value)
+        } else {
+            state.value.copy(quickSplitSecondCaption = viewAction.value)
+        }
+
+        // The windows change places together with their window types, as the apps do in the preset editor
+        Action.SwapQuickSplitWindows -> state.value.run {
+            copy(
+                quickSplitInsertFirst = !quickSplitInsertFirst,
+                quickSplitFirstCaption = quickSplitSecondCaption,
+                quickSplitSecondCaption = quickSplitFirstCaption
+            )
+        }
+
+        Action.CommitQuickSplit -> {
+            if (isCommitInProgress.compareAndSet(false, true)) {
+                val currentState = state.value
+                viewModelScope.launch(Dispatchers.IO) {
+                    runCatching { commitQuickSplit(currentState) }
+                        .onSuccess { sendAction(Action.SetCloseScreenSingleEvent(true)) }
+                        .onFailure {
+                            Timber.e(it)
+                            isCommitInProgress.set(false)
+                        }
+                }
+            }
+            state.value
+        }
+    }
+
+    private suspend fun commitQuickSplit(viewState: ViewState) {
+        saveFloatPrefUseCase.execute(FloatPref.QuickSplitRatio, viewState.windowRatio)
+        saveBoolPrefUseCase.execute(BoolPref.QuickSplitInsertFirst, viewState.quickSplitInsertFirst)
+        saveBoolPrefUseCase.execute(BoolPref.QuickSplitFirstCaption, viewState.quickSplitFirstCaption)
+        saveBoolPrefUseCase.execute(BoolPref.QuickSplitSecondCaption, viewState.quickSplitSecondCaption)
     }
 
     private suspend fun commitPreset(viewState: ViewState): Boolean {
@@ -251,6 +371,8 @@ class AddViewModel @Inject constructor(
         .mapNotNull { format -> format.presetRatio?.let { format to abs(it - this) } }
         .minBy { it.second }
         .first
+
+    private fun DeviceAppInfo?.isSameApp(other: DeviceAppInfo?) = this != null && packageName == other?.packageName
 
     private fun ViewState.withFreeWindow(app: DeviceAppInfo): ViewState {
         if (freeWindows.any { it.app.packageName == app.packageName }) return this
@@ -284,7 +406,12 @@ class AddViewModel @Inject constructor(
         val customRatio: Float = .5f,
         val isWindowTypeEnabled: Boolean = false,
         val isWindowTypeAvailable: Boolean = false,
-        val isNativeSplitEnabled: Boolean = false
+        val isNativeSplitEnabled: Boolean = false,
+        val isMainWindowAvailable: Boolean = false,
+        val quickSplit: Boolean = false,
+        val quickSplitInsertFirst: Boolean = false,
+        val quickSplitFirstCaption: Boolean = false,
+        val quickSplitSecondCaption: Boolean = false
     ) : MviViewState {
         val windowRatio: Float get() = splitForm.presetRatio ?: customRatio
     }
@@ -297,6 +424,8 @@ class AddViewModel @Inject constructor(
         internal class SetTopWithCaption(val value: Boolean) : Action()
         internal class SetBottomWithCaption(val value: Boolean) : Action()
         internal class SetWindowTypeAvailable(val value: Boolean) : Action()
+        internal class SetMainWindowAvailable(val value: Boolean) : Action()
+        internal class SetFreeMainWindow(val id: Int, val enabled: Boolean) : Action()
         internal class SetWindowTypePrefs(
             val isNativeSplitEnabled: Boolean,
             val isWindowTypeEnabled: Boolean
@@ -317,13 +446,26 @@ class AddViewModel @Inject constructor(
         internal class AddFreeWindow(val app: DeviceAppInfo) : Action()
         internal class UpdateFreeWindow(val window: DisplayFreeWindow) : Action()
         internal class RemoveFreeWindow(val id: Int) : Action()
+        internal class SetQuickSplitData(
+            val ratio: Float,
+            val insertFirst: Boolean,
+            val firstCaption: Boolean,
+            val secondCaption: Boolean
+        ) : Action()
+
+        internal class SetQuickSplitInsertFirst(val value: Boolean) : Action()
+        internal class SetQuickSplitCaption(val isFirst: Boolean, val value: Boolean) : Action()
 
         data object CommitPreset : Action()
         data object ShowPresets : Action()
         data object RoundCustomRatio : Action()
         data object ToggleTopAutoPlay : Action()
         data object ToggleBottomAutoPlay : Action()
+        data object ToggleTopMainWindow : Action()
+        data object ToggleBottomMainWindow : Action()
         data object SwapApps : Action()
+        data object SwapQuickSplitWindows : Action()
+        data object CommitQuickSplit : Action()
     }
 
     private companion object {

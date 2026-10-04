@@ -47,6 +47,7 @@ internal fun FreeModeEditor(
     deviceApps: List<DeviceAppInfo>,
     showWindowType: Boolean,
     isWindowTypeLocked: Boolean,
+    showMainWindow: Boolean,
     uiScaleState: State<Float>?,
     sendAction: (AddViewModel.Action) -> Unit,
     onBack: () -> Unit,
@@ -85,7 +86,9 @@ internal fun FreeModeEditor(
                 app?.let {
                     sendAction(
                         AddViewModel.Action.UpdateFreeWindow(
-                            window.copy(app = it.copy(withCaption = window.app.withCaption))
+                            window.copy(
+                                app = it.copy(withCaption = window.app.withCaption, mainWindow = window.app.mainWindow)
+                            )
                         )
                     )
                 }
@@ -125,7 +128,9 @@ internal fun FreeModeEditor(
                         color = freeWindowColor(index),
                         showWindowType = showWindowType,
                         isWindowTypeLocked = isWindowTypeLocked,
+                        showMainWindow = showMainWindow,
                         onChange = { sendAction(AddViewModel.Action.UpdateFreeWindow(it)) },
+                        onMainWindowChange = { sendAction(AddViewModel.Action.SetFreeMainWindow(window.id, it)) },
                         onGestureActive = { active -> activeWindowGestures += if (active) 1 else -1 },
                         onAppClick = { replaceWindowId = window.id },
                         onClose = { sendAction(AddViewModel.Action.RemoveFreeWindow(window.id)) }

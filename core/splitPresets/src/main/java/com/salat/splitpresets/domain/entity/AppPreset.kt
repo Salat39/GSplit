@@ -5,5 +5,6 @@ data class AppPreset(
     val packageName: String,
     val icon: Any?,
     val autoPlay: Boolean? = null,
-    val withCaption: Boolean = false
+    val withCaption: Boolean = false,
+    val mainWindow: Boolean = false
 )

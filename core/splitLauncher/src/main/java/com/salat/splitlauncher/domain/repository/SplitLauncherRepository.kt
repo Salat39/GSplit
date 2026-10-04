@@ -11,6 +11,9 @@ interface SplitLauncherRepository {
     // True while windows can be launched without the system caption - the setting is on and ADB is connected
     val noCaptionWindowsFlow: StateFlow<Boolean>
 
+    // True while the main window of a preset can switch between the split and the full screen through ADB
+    val mainWindowAvailableFlow: StateFlow<Boolean>
+
     val darkBackgroundFlow: SharedFlow<Boolean>
 
     val splitStartedFlow: SharedFlow<Pair<SplitLaunchSource, SplitLaunchTask>>

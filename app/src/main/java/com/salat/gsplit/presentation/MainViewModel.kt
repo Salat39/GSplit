@@ -82,7 +82,8 @@ class MainViewModel @Inject constructor(
     private val _launchDarkScreenState = MutableStateFlow<Boolean?>(null)
     val launchDarkScreenState = _launchDarkScreenState.asStateFlow()
 
-    private val _minimizeApp = Channel<Unit>()
+    // A stopped activity must not block the split started collector. The request waits for the next start
+    private val _minimizeApp = Channel<Unit>(Channel.CONFLATED)
     val minimizeApp = _minimizeApp.receiveAsFlow()
 
     private val _importSettingsTask = Channel<Unit>()
@@ -205,7 +206,7 @@ class MainViewModel @Inject constructor(
                 SplitLaunchSource.CLICK -> {
                     if (!task.darkBackground && loadBoolPrefUseCase.execute(BoolPref.MinimizeByStart)) {
                         Timber.d("App minimized by preset click")
-                        _minimizeApp.send(Unit)
+                        _minimizeApp.trySend(Unit)
                     }
                 }
 
@@ -217,7 +218,7 @@ class MainViewModel @Inject constructor(
                         } else {
                             Timber.d("App minimized by auto start")
                         }
-                        _minimizeApp.send(Unit)
+                        _minimizeApp.trySend(Unit)
                     }
                     _autoRunFiller.value = false
                 }

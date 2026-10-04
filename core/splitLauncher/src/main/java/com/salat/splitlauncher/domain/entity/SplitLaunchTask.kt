@@ -9,5 +9,7 @@ data class SplitLaunchTask(
     val bottomWindowShift: Boolean,
     val id: Long,
     val windows: List<SplitLaunchWindow> = emptyList(),
-    val ratio: Float = .5f
+    val ratio: Float = .5f,
+    // Quick split - the app that was in full screen before the split
+    val quickSplitOpenPackage: String = ""
 )

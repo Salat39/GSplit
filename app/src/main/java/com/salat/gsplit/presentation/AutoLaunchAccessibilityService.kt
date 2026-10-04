@@ -5,6 +5,7 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.accessibilityservice.GestureDescription
 import android.app.ActivityOptions
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.graphics.Path
 import android.graphics.Rect
@@ -20,6 +21,7 @@ import com.salat.adb.domain.repository.AdbRepository
 import com.salat.gsplit.PresetLauncherActivity
 import com.salat.gsplit.presentation.entity.FreeFormPosition
 import com.salat.gsplit.presentation.entity.FreeFormWindow
+import com.salat.gsplit.presentation.entity.SessionWindows
 import com.salat.gsplit.presentation.entity.SplitStateBroadcastData
 import com.salat.gsplit.presentation.util.PauseDetector
 import com.salat.overlay.presentation.startOverlay
@@ -28,9 +30,11 @@ import com.salat.preferences.domain.DataStoreRepository
 import com.salat.preferences.domain.entity.BoolPref
 import com.salat.preferences.domain.entity.IntPref
 import com.salat.resources.R
+import com.salat.screenspecs.domain.repository.ScreenSpecsRepository
 import com.salat.statekeeper.domain.entity.AccessibilityServiceEvent
 import com.salat.statekeeper.domain.entity.LaunchedSplitType
 import com.salat.statekeeper.domain.entity.LaunchedWindowsConfig
+import com.salat.statekeeper.domain.entity.QuickSplitTarget
 import com.salat.statekeeper.domain.entity.SplitLauncherEvent
 import com.salat.statekeeper.domain.repository.StateKeeperRepository
 import dagger.hilt.android.AndroidEntryPoint
@@ -52,10 +56,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
+import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -77,6 +84,7 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
         private const val AWAIT_TIMEOUT = 5_000L
         private const val FREE_WINDOWS_SETTLE_TIMEOUT = 1_000L
         private const val HIDDEN_WINDOW_AWAIT_TIMEOUT = 1_500L
+        private const val FULLSCREEN_CHECK_INTERVAL = 100L
         private const val SLEEP_DELAY = 300_000L
 
         private const val RETRY_WHEN_ATTEMPTS = 3
@@ -99,6 +107,9 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
     @Inject
     lateinit var adb: AdbRepository
 
+    @Inject
+    lateinit var screenSpecs: ScreenSpecsRepository
+
     private val _freeFormWindows = MutableStateFlow<Pair<FreeFormWindow?, FreeFormWindow?>>(Pair(null, null))
     private val freeFormWindows = _freeFormWindows.asStateFlow()
 
@@ -108,6 +119,10 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
     private val shownWindows = combine(freeFormWindows, freePresetWindows) { (top, bottom), freeWindows ->
         listOfNotNull(top, bottom) + freeWindows
     }
+
+    // Null until the first scan of this service instance
+    private val _sessionWindows = MutableStateFlow<SessionWindows?>(null)
+    private val sessionWindows = _sessionWindows.asStateFlow()
 
     private val _splitStateBroadcastData = MutableStateFlow<SplitStateBroadcastData?>(null)
     private val splitStateBroadcastData = _splitStateBroadcastData.asStateFlow()
@@ -147,6 +162,8 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
 
     // The window list does not show the windows under the open preset panel
     private var presetPanelCoveredPackages = emptyList<String>()
+    private var isPresetPanelCover = false
+    private var replaceMenuCoveredPackages = emptyList<String>()
 
     // add this at the top of the class
     private val stateChangeFlow = MutableSharedFlow<Unit>(
@@ -178,18 +195,10 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
         super.onCreate()
         Timber.d("[AS] Created")
 
-        // start debounced collector for content-changed events
+        // One collector runs the debounced window scans in sequence
         serviceScope.launch {
-            launch {
-                stateChangeFlow
-                    .debounce(60)
-                    .collect { collectFreeFormWindows() }
-            }
-            launch {
-                contentChangeFlow
-                    .debounce(300)
-                    .collect { collectFreeFormWindows() }
-            }
+            merge(stateChangeFlow.debounce(60), contentChangeFlow.debounce(300))
+                .collect { collectFreeFormWindows() }
         }
 
         serviceScope.launch {
@@ -199,7 +208,9 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
         }
         serviceScope.launch { collectSharedEvents() }
         serviceScope.launch { collectPresetPanelCoveredWindows() }
+        serviceScope.launch { collectReplaceMenuCoveredWindows() }
         serviceScope.launch { collectSettledSessions() }
+        serviceScope.launch { collectQuickSplitTargetRequests() }
 
         pauseDetector = PauseDetector(this, serviceScope, ::onPauseEnded)
     }
@@ -264,6 +275,8 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
 
                     AccessibilityServiceEvent.CloseSplit -> closeWindows()
 
+                    is AccessibilityServiceEvent.CloseQuickSplit -> closeQuickSplit(event.sessionId)
+
                     is AccessibilityServiceEvent.ReplaceWindow -> replaceWindow(
                         event.index,
                         event.packageName,
@@ -295,20 +308,188 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
     }
 
     // The panel sets the flag before its window appears. The window list still shows the windows under it
+    // The panel stops before the window list shows the covered windows again. The cover stays until they return
     private fun CoroutineScope.collectPresetPanelCoveredWindows() = launch {
-        stateKeeper.presetPanelShown.filter { it }.collect {
-            presetPanelCoveredPackages = shownWindows.first().map { it.packageName }
+        stateKeeper.presetPanelShown.collectLatest { isShown ->
+            if (isShown) {
+                presetPanelCoveredPackages = shownWindows.first().map { it.packageName }
+            } else {
+                withTimeoutOrNull(HIDDEN_WINDOW_AWAIT_TIMEOUT) {
+                    shownWindows.first { windows ->
+                        windows.map { it.packageName }.containsAll(presetPanelCoveredPackages)
+                    }
+                }
+            }
+            isPresetPanelCover = isShown
+            stateChangeFlow.tryEmit(Unit)
+        }
+    }
+
+    // The menu sets the flag before its window appears. The window list still shows the windows under it
+    // The window replacement starts right after the menu closes. A later replacement does not use this list
+    private fun CoroutineScope.collectReplaceMenuCoveredWindows() = launch {
+        stateKeeper.replaceMenuShown.collectLatest { isShown ->
+            if (isShown) {
+                replaceMenuCoveredPackages = shownWindows.first().map { it.packageName }
+            } else {
+                delay(AWAIT_TIMEOUT)
+                replaceMenuCoveredPackages = emptyList()
+            }
         }
     }
 
     // A window without caption opens full screen and gets its bounds later. The window list is not stable until then
     private fun CoroutineScope.collectSettledSessions() = launch {
-        stateKeeper.placedWindowsSessionId.collectLatest { sessionId ->
+        stateKeeper.launchedWindows.mapNotNull { it?.sessionId }.distinctUntilChanged().collectLatest { sessionId ->
+            stateKeeper.placedWindowsSessionId.first { it >= sessionId }
             delay(INIT_WINDOWS_DELAY)
             settledSessionId = sessionId
             stateChangeFlow.tryEmit(Unit)
         }
     }
+
+    // Quick split shows its own window only after this answer, so the window list still has the app
+    // A second activation of the shortcut closes the open quick split in the queue of the window events
+    private fun CoroutineScope.collectQuickSplitTargetRequests() = launch {
+        stateKeeper.quickSplitTargetRequests.collect { reply ->
+            try {
+                val openSplit = openQuickSplit()
+                val target = if (openSplit != null) {
+                    QuickSplitTarget.OpenSplit
+                } else findFullscreenAppPackage()?.let { QuickSplitTarget.FullscreenApp(it) }
+                if (reply.complete(target) && openSplit != null) {
+                    stateKeeper.sendAccessibilityServiceEvent(
+                        AccessibilityServiceEvent.CloseQuickSplit(openSplit.sessionId)
+                    )
+                }
+            } catch (e: Exception) {
+                reply.complete(null)
+                Timber.e(e)
+            }
+        }
+    }
+
+    // The quick split is open while a window of it shows
+    private fun openQuickSplit() = stateKeeper.getLaunchedWindows()?.takeIf { config ->
+        config.quickSplitOpenPackage.isNotEmpty() && config.sessionId != stateKeeper.getClosedSessionId() &&
+            _freeFormWindows.value.toList().any { it != null }
+    }
+
+    // With ADB the open app covers the screen first and the inserted window closes under it
+    // Without ADB the window list does not show a window under a full screen app, so the inserted window closes first
+    private suspend fun closeQuickSplit(sessionId: Long) {
+        val config = openQuickSplit()?.takeIf { it.sessionId == sessionId } ?: return
+        val previousClosedSessionId = stateKeeper.getClosedSessionId()
+        stateKeeper.setClosedSessionId(sessionId)
+        val openPackage = config.quickSplitOpenPackage
+        val splitWindows = _freeFormWindows.value.toList().filterNotNull()
+        val openWindow = splitWindows.find { it.packageName == openPackage }
+        val insertedWindows = splitWindows.filter { it.packageName != openPackage }
+
+        // A covered dark screen does not close, so it closes while it shows under the windows
+        stateKeeper.sendCloseDarkScreenEvent()
+
+        // Android 8 keeps the windows in one stack, so ADB cannot close one window
+        val closesTasks = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && adb.ensureConnected()
+        val isClosed = if (closesTasks) {
+            val isOpenAppShown = openWindow == null || moveToFullscreen(openWindow)
+            if (!isOpenAppShown) Timber.w("[AS] Open app $openPackage stays in its window")
+            if (stateKeeper.getLaunchedWindows()?.sessionId == sessionId) {
+                insertedWindows.forEach { window -> adb.getTaskId(window.packageName)?.let { adb.minimize(it) } }
+            }
+            insertedWindows.all { awaitWindowGone(it) }
+        } else {
+            val areInsertedClosed = insertedWindows.all { tapCloseAndAwait(it) }
+            if (areInsertedClosed) openWindow?.let { moveToFullscreen(it) }
+            areInsertedClosed
+        }
+        // The split stays open, so the next activation of the shortcut can try again
+        if (!isClosed) {
+            Timber.w("[AS] Quick split of $openPackage stays open")
+            stateKeeper.setClosedSessionId(previousClosedSessionId)
+        }
+    }
+
+    // A window without caption moves through ADB. Returns true when the app shows in full screen
+    private suspend fun moveToFullscreen(window: FreeFormWindow): Boolean {
+        if (!tapMaximize(window)) {
+            stateKeeper.sendSplitLauncherEvent(SplitLauncherEvent.MoveToFullscreen(window.packageName))
+        }
+        return withTimeoutOrNull(AWAIT_TIMEOUT) {
+            while (findFullscreenAppPackage() != window.packageName) delay(FULLSCREEN_CHECK_INTERVAL)
+        } != null
+    }
+
+    // Returns true when the window is not in the window list after the tap
+    private suspend fun tapCloseAndAwait(window: FreeFormWindow): Boolean {
+        withTimeoutOrNull(AWAIT_TIMEOUT) {
+            suspendCancellableCoroutine { cont -> closeWindow(window) { cont.resume(it) } }
+        }
+        return awaitWindowGone(window)
+    }
+
+    private suspend fun awaitWindowGone(window: FreeFormWindow) = withTimeoutOrNull(AWAIT_TIMEOUT) {
+        freeFormWindows.first { pair -> pair.toList().none { it?.packageName == window.packageName } }
+    } != null
+
+    // The caption button moves the window to full screen without a restart of the app
+    private suspend fun tapMaximize(window: FreeFormWindow): Boolean {
+        val node = window.data.root?.findAccessibilityNodeInfosByViewId("android:id/maximize_window")?.firstOrNull()
+            ?: return false
+        val bounds = Rect().also { node.getBoundsInScreen(it) }
+        val tapPath = Path().apply {
+            moveTo(
+                bounds.exactCenterX().coerceIn(0f, screenWidth.toFloat()),
+                bounds.exactCenterY().coerceIn(0f, screenHeight.toFloat())
+            )
+        }
+        val tapGesture = GestureDescription.Builder()
+            .addStroke(GestureDescription.StrokeDescription(tapPath, 0, CLOSE_WINDOW_CLICK_TIME))
+            .build()
+        return withTimeoutOrNull(AWAIT_TIMEOUT) {
+            suspendCancellableCoroutine { cont ->
+                dispatchGesture(
+                    tapGesture,
+                    object : GestureResultCallback() {
+                        override fun onCompleted(gestureDescription: GestureDescription?) = cont.resume(true)
+
+                        override fun onCancelled(gestureDescription: GestureDescription?) = cont.resume(false)
+                    },
+                    null
+                )
+            }
+        } ?: false
+    }
+
+    // The top app can show a dialog over its full screen window. An own window on top means no target app
+    private fun findFullscreenAppPackage(): String? {
+        val appWindows = windows.orEmpty()
+            .filter { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && !it.isInPictureInPictureMode }
+            .mapNotNull { window -> window.root?.packageName?.toString()?.let { it to window } }
+        val topPackage = appWindows.maxByOrNull { (_, window) -> window.layer }?.first
+        if (topPackage == null || topPackage == packageName || topPackage == homePackageName()) return null
+
+        val appArea = splitWindowsArea()
+        val bounds = Rect()
+        return topPackage.takeIf {
+            appWindows.any { (pkg, window) ->
+                window.getBoundsInScreen(bounds)
+                pkg == topPackage && bounds.contains(appArea)
+            }
+        }
+    }
+
+    // The launcher places the split windows in this area. A window of the split is smaller than the area
+    private fun splitWindowsArea(): Rect {
+        val left = screenSpecs.getScreenHorizontalInsets().first
+        val top = screenSpecs.getStatusBarHeight()
+        return Rect(left, top, left + screenSpecs.getFreeScreenWidth(), top + screenSpecs.getFreeScreenHeight())
+    }
+
+    private fun homePackageName() = packageManager.resolveActivity(
+        Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME),
+        PackageManager.MATCH_DEFAULT_ONLY
+    )?.activityInfo?.packageName
 
     // Notify other app
     private fun CoroutineScope.collectSplitStateBroadcasts() = launch(Dispatchers.IO) {
@@ -316,9 +497,19 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
     }
 
     private fun CoroutineScope.collectWindowsChanges() = launchWithRetry(RETRY_WHEN_ATTEMPTS) {
-        combine(freeFormWindows, freePresetWindows, ::Pair).collect { (splitWindows, freeWindows) ->
-            val (topWindow, bottomWindow) = splitWindows
+        sessionWindows.filterNotNull().collect { windows ->
+            val (topWindow, bottomWindow, freeWindows, isSessionCovered) = windows
             val isAnyWindowShown = topWindow != null || bottomWindow != null || freeWindows.isNotEmpty()
+            if (isAnyWindowShown || isSessionCovered) {
+                stopSleepTask()
+                splitWasLaunched = true
+            }
+            // Own windows cover the session windows. The overlay and the broadcast keep the last state
+            // The full screen main window is the exception, the split controls must not show over it
+            if (!isAnyWindowShown && isSessionCovered) {
+                if (enableOverlays && windows.isMainWindowFullScreen) stopOverlay(this@AutoLaunchAccessibilityService)
+                return@collect
+            }
 
             // At least one window appears, enable dark screen closing processing
             if (isAnyWindowShown) {
@@ -343,11 +534,6 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
                         secondPackageName = bottomWindow?.packageName ?: ""
                     )
                 }
-            }
-
-            if (isAnyWindowShown) {
-                stopSleepTask()
-                splitWasLaunched = true
             }
 
             if (!isAnyWindowShown && splitWasLaunched) {
@@ -421,6 +607,7 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
         if (currentWindows == null) {
             _freeFormWindows.emit(null to null)
             _freePresetWindows.emit(emptyList())
+            _sessionWindows.value = SessionWindows(null, null, emptyList(), isCovered = false)
             return
         }
 
@@ -428,6 +615,7 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
         var topWindowCandidate: AccessibilityWindowInfo? = null
         var bottomWindowCandidate: AccessibilityWindowInfo? = null
         val freePresetCandidates = mutableListOf<FreeFormWindow>()
+        var isMainWindowFullScreen = false
 
         for (window in currentWindows) {
             // Check is no system app
@@ -436,7 +624,12 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
             window.getBoundsInScreen(windowBounds)
 
             // Check is free form
-            if (windowBounds.width() >= screenWidth && windowBounds.height() >= screenHeight) continue
+            if (windowBounds.width() >= screenWidth && windowBounds.height() >= screenHeight) {
+                if (split.mainWindowPackage.isNotEmpty() && !isMainWindowFullScreen) {
+                    isMainWindowFullScreen = window.root?.packageName?.toString() == split.mainWindowPackage
+                }
+                continue
+            }
 
             // Check window in current split config
             window.root?.packageName?.let { wPcg ->
@@ -460,41 +653,40 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
             _freePresetWindows.emit(freePresetWindows)
         }
 
-        // Return if no windows
-        val (checkTop, checkBottom) = _freeFormWindows.value
-        if (topWindowCandidate == null && bottomWindowCandidate == null && checkTop == null && checkBottom == null &&
-            !enableDarkScreenCloseTracking
-        ) return
-
         // Get split params
         val desiredBottomWindowShift = split.bottomWindowShift
 
         // Create FreeFormWindow objects if the corresponding window is found
-        val freeFormTop = topWindowCandidate?.let {
-            FreeFormWindow(it.root?.packageName?.toString() ?: "unknown", FreeFormPosition.TOP, it)
-        }
+        val freeFormTop = topWindowCandidate?.let { FreeFormWindow(split.firstAppPackage, FreeFormPosition.TOP, it) }
         val freeFormBottom = bottomWindowCandidate?.let {
-            FreeFormWindow(it.root?.packageName?.toString() ?: "unknown", FreeFormPosition.BOTTOM, it)
+            FreeFormWindow(split.secondAppPackage, FreeFormPosition.BOTTOM, it)
         }
 
         val (currentTop, currentBottom) = _freeFormWindows.value
         if (currentTop != freeFormTop || currentBottom != freeFormBottom) {
             _freeFormWindows.emit(Pair(freeFormTop, freeFormBottom))
         }
+        _sessionWindows.value = SessionWindows(
+            top = freeFormTop,
+            bottom = freeFormBottom,
+            free = freePresetWindows,
+            isCovered = split.isCoveredByOwnWindow(isMainWindowFullScreen),
+            isMainWindowFullScreen = isMainWindowFullScreen
+        )
 
         // The preset panel covers the windows but the split stays open
-        val trackDarkScreenClose = enableDarkScreenCloseTracking && !stateKeeper.presetPanelShown.value
+        val trackDarkScreenClose = enableDarkScreenCloseTracking && !isPresetPanelCover
         // If darkScreenAutoClose is enabled, there are no freeform windows and the full-screen application
         // is in the list of windows, send the dark screen close event
         if (darkScreenAutoClose && trackDarkScreenClose && split.sessionId == settledSessionId &&
             topWindowCandidate == null && bottomWindowCandidate == null && freePresetWindows.isEmpty() &&
-            // Check if your full-screen self app is present in the window hierarchy
-            currentWindows.any { window ->
-                window.root?.packageName?.toString() == packageName
-            }
+            currentWindows.hasOwnAppWindow()
         ) {
-            stateKeeper.sendCloseDarkScreenEvent()
-            enableDarkScreenCloseTracking = false
+            // Check this last. The launcher sets the flag before its dark screen comes on screen
+            if (!stateKeeper.isLaunchRunning()) {
+                stateKeeper.sendCloseDarkScreenEvent()
+                enableDarkScreenCloseTracking = false
+            }
         }
 
         // Force focus top window. Refocus only if the second window has focus
@@ -506,6 +698,16 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
             setFocusWindow(freeFormTop.packageName)
         }
     }
+
+    // The overlay of GSplit does not count. It stays on screen when a full screen app hides the dark screen
+    private fun List<AccessibilityWindowInfo>.hasOwnAppWindow() = any { window ->
+        window.type == AccessibilityWindowInfo.TYPE_APPLICATION && window.root?.packageName?.toString() == packageName
+    }
+
+    // A new window without caption is full screen until it gets its bounds. The main window can expand to full screen
+    private fun LaunchedWindowsConfig.isCoveredByOwnWindow(isMainWindowFullScreen: Boolean) =
+        sessionId != stateKeeper.getClosedSessionId() &&
+            (sessionId != settledSessionId || isMainWindowFullScreen || isPresetPanelCover)
 
     override fun onInterrupt() {
         Timber.d("[AS] Interrupted")
@@ -542,6 +744,12 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
     private suspend fun closeWindows() {
         stateKeeper.setClosedSessionId(getCurrentSessionId())
 
+        val expandedConfig = stateKeeper.getLaunchedWindows()?.takeIf { it.mainWindowExpanded }
+        if (expandedConfig != null && adb.ensureConnected()) {
+            closeSessionTasks(expandedConfig)
+            return
+        }
+
         val hasFreePresetWindows = _freePresetWindows.value.isNotEmpty()
         if (hasFreePresetWindows) awaitFreePresetWindows()
 
@@ -564,6 +772,15 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
         withTimeoutOrNull(FREE_WINDOWS_SETTLE_TIMEOUT) {
             freePresetWindows.first { it.size >= count }
         }
+    }
+
+    // The full screen main window covers the other windows of the session. The window list does not show them
+    private suspend fun closeSessionTasks(config: LaunchedWindowsConfig) {
+        (listOf(config.firstAppPackage, config.secondAppPackage) + config.freeWindowPackages)
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .forEach { pkg -> adb.getTaskId(pkg)?.let { adb.minimize(it) } }
+        stateKeeper.setLaunchedWindows(config.copy(mainWindowExpanded = false))
     }
 
     private suspend fun adbCloseWindows() {
@@ -759,6 +976,8 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
     }
 
     private suspend fun replaceWindow(index: Int, packageName: String, autoPlay: Boolean) {
+        val menuCoveredPackages = replaceMenuCoveredPackages
+        replaceMenuCoveredPackages = emptyList()
         val currentConfig = stateKeeper.getLaunchedWindows()
         if (currentConfig?.type == LaunchedSplitType.FREE) {
             replaceFreeWindow(currentConfig, index, packageName, autoPlay)
@@ -780,13 +999,20 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
             // Check: if there is no window at this index — immediately execute onReplaceWindowTask
             val currentPair = _freeFormWindows.value
             val maybeExisting = if (index == 0) currentPair.first else currentPair.second
-            if (maybeExisting == null) {
+            val slotPackage = currentConfig?.run { if (index == 0) firstAppPackage else secondAppPackage }.orEmpty()
+            // The replace menu covers the slot window. The window list shows it again after the menu closes
+            val isCoveredByMenu = maybeExisting == null && slotPackage in menuCoveredPackages
+            if (maybeExisting == null && !isCoveredByMenu) {
+                if (currentConfig?.mainWindowExpanded == true && adb.ensureConnected()) {
+                    adb.getTaskId(slotPackage)?.let { adb.minimize(it) }
+                    delay(150L)
+                }
                 onReplaceWindowTask(index, packageName, autoPlay)
                 return
             }
 
             // wait until the desired position in Pair becomes non-null
-            val targetWindow = withTimeoutOrNull(AWAIT_TIMEOUT) {
+            val targetWindow = withTimeoutOrNull(if (isCoveredByMenu) HIDDEN_WINDOW_AWAIT_TIMEOUT else AWAIT_TIMEOUT) {
                 freeFormWindows
                     .map { pair ->
                         if (index == 0) pair.first
@@ -794,7 +1020,11 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
                     }
                     .filterNotNull() // remove nulls
                     .first() // wait for the first non-null FreeFormWindow
-            } ?: return
+            } ?: run {
+                // The covered window does not show again. Replace it as an empty slot
+                if (isCoveredByMenu) onReplaceWindowTask(index, packageName, autoPlay)
+                return
+            }
 
             if (adb.ensureConnected()) {
                 targetWindow.packageName.takeIf { it.isNotEmpty() && it != "unknown" }?.let { targetPackage ->
@@ -862,6 +1092,8 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
     }
 
     private suspend fun replacePreset(presetId: Long, fromPresetPanel: Boolean) {
+        if (switchOpenMainWindow(presetId) { putExtra("id", presetId) }) return
+
         if (fromPresetPanel && !awaitPresetPanelCoveredWindows()) {
             startPresetLauncher { putExtra("id", presetId) }
             return
@@ -885,6 +1117,16 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
 
         startPresetLauncher { putExtra("id", presetId) }
     }
+
+    // The launcher switches the main window of the open preset and keeps its windows open. Returns true for it
+    private suspend fun switchOpenMainWindow(presetId: Long, launcherExtras: Intent.() -> Unit): Boolean {
+        if (stateKeeper.getLaunchedWindows()?.isOpenMainWindowPreset(presetId) != true) return false
+        startPresetLauncher(launcherExtras)
+        return true
+    }
+
+    private fun LaunchedWindowsConfig.isOpenMainWindowPreset(presetId: Long) = this.presetId == presetId &&
+        mainWindowPackage.isNotEmpty() && sessionId != stateKeeper.getClosedSessionId()
 
     private suspend fun replaceSplit(
         firstPackage: String,
@@ -927,6 +1169,10 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
     }
 
     private suspend fun launchLast(fromPresetPanel: Boolean) {
+        // The last launched split is the open session
+        val lastPresetId = stateKeeper.getLaunchedWindows()?.presetId
+        if (lastPresetId != null && switchOpenMainWindow(lastPresetId) { putExtra("launch_last", true) }) return
+
         if (fromPresetPanel && !awaitPresetPanelCoveredWindows()) {
             startPresetLauncher { putExtra("launch_last", true) }
             return
@@ -972,7 +1218,8 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
         stateKeeper.setClosedSessionId(getCurrentSessionId())
 
         val (first, second) = _freeFormWindows.value
-        if (first != null || second != null || _freePresetWindows.value.isNotEmpty()) {
+        val hasExpandedMainWindow = stateKeeper.getLaunchedWindows()?.mainWindowExpanded == true
+        if (first != null || second != null || _freePresetWindows.value.isNotEmpty() || hasExpandedMainWindow) {
             closeWindows()
             delay(200L)
         }

@@ -2,14 +2,19 @@ package com.salat.statekeeper.data.repository
 
 import com.salat.statekeeper.domain.entity.AccessibilityServiceEvent
 import com.salat.statekeeper.domain.entity.LaunchedWindowsConfig
+import com.salat.statekeeper.domain.entity.QuickSplitTarget
 import com.salat.statekeeper.domain.entity.SplitLauncherEvent
 import com.salat.statekeeper.domain.repository.StateKeeperRepository
+import java.util.concurrent.atomic.AtomicInteger
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withTimeoutOrNull
 
 class StateKeeperRepositoryImpl : StateKeeperRepository {
     private var skipAutoLaunch = false
@@ -85,10 +90,49 @@ class StateKeeperRepositoryImpl : StateKeeperRepository {
         _presetPanelShown.value = value
     }
 
+    private val _replaceMenuShown = MutableStateFlow(false)
+    override val replaceMenuShown = _replaceMenuShown.asStateFlow()
+
+    override fun setReplaceMenuShown(value: Boolean) {
+        _replaceMenuShown.value = value
+    }
+
     private val _placedWindowsSessionId = MutableStateFlow(0L)
     override val placedWindowsSessionId = _placedWindowsSessionId.asStateFlow()
 
+    // A late signal of an older launch must not replace the signal of a newer session
     override fun setPlacedWindowsSessionId(sessionId: Long) {
-        _placedWindowsSessionId.value = sessionId
+        _placedWindowsSessionId.update { maxOf(it, sessionId) }
+    }
+
+    // Launches can overlap. The flag stays on until the last launch ends
+    private val runningLaunches = AtomicInteger()
+
+    override fun setLaunchRunning(running: Boolean) {
+        if (running) runningLaunches.incrementAndGet() else runningLaunches.decrementAndGet()
+    }
+
+    override fun isLaunchRunning() = runningLaunches.get() > 0
+
+    private val _quickSplitTargetRequests = MutableSharedFlow<CompletableDeferred<QuickSplitTarget?>>(
+        extraBufferCapacity = 1,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    override val quickSplitTargetRequests = _quickSplitTargetRequests.asSharedFlow()
+
+    override suspend fun requestQuickSplitTarget(): QuickSplitTarget? {
+        if (!accessibilityServiceEnabled.value) return null
+        val reply = CompletableDeferred<QuickSplitTarget?>()
+        // The request is cancelled after the timeout. The service does not act on a late request
+        return try {
+            _quickSplitTargetRequests.emit(reply)
+            withTimeoutOrNull(QUICK_SPLIT_TARGET_TIMEOUT) { reply.await() }
+        } finally {
+            reply.cancel()
+        }
+    }
+
+    private companion object {
+        const val QUICK_SPLIT_TARGET_TIMEOUT = 1_000L
     }
 }

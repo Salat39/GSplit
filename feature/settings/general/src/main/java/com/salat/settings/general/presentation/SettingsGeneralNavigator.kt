@@ -19,6 +19,7 @@ fun NavGraphBuilder.settingsGeneralScreen(
     onNavigateToAppSwitchOverlay: () -> Unit,
     onNavigateToDarkScreenMode: () -> Unit,
     onNavigateToWindowShiftMode: () -> Unit,
+    onNavigateToQuickSplit: () -> Unit,
     onNavigateToAppTasks: () -> Unit,
     onNavigateToApi: () -> Unit,
     onNavigateBack: () -> Unit
@@ -41,6 +42,7 @@ fun NavGraphBuilder.settingsGeneralScreen(
         onNavigateToAppSwitchOverlay = onNavigateToAppSwitchOverlay,
         onNavigateToDarkScreenMode = onNavigateToDarkScreenMode,
         onNavigateToWindowShiftMode = onNavigateToWindowShiftMode,
+        onNavigateToQuickSplit = onNavigateToQuickSplit,
         onNavigateToAppTasks = onNavigateToAppTasks,
         onNavigateToApi = onNavigateToApi,
         onNavigateBack = onNavigateBack

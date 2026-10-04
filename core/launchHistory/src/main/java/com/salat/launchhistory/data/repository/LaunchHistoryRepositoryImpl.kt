@@ -99,7 +99,8 @@ class LaunchHistoryRepositoryImpl(private val dataStore: DataStoreRepository) : 
             bottomWindowShift = this.bottomWindowShift,
             id = this.id,
             windows = this.windows.map { it.toDomain() },
-            ratio = this.ratio
+            ratio = this.ratio,
+            quickSplitOpenPackage = this.quickSplitOpenPackage
         )
     }
 
@@ -117,7 +118,8 @@ class LaunchHistoryRepositoryImpl(private val dataStore: DataStoreRepository) : 
             title = this.title,
             packageName = this.packageName,
             autoPlay = this.autoPlay,
-            withCaption = this.withCaption
+            withCaption = this.withCaption,
+            mainWindow = this.mainWindow
         )
     }
 
@@ -135,7 +137,8 @@ class LaunchHistoryRepositoryImpl(private val dataStore: DataStoreRepository) : 
             bottomWindowShift = this.bottomWindowShift,
             id = this.id,
             windows = this.windows.map { it.toDto() },
-            ratio = this.ratio
+            ratio = this.ratio,
+            quickSplitOpenPackage = this.quickSplitOpenPackage
         )
     }
 
@@ -153,7 +156,8 @@ class LaunchHistoryRepositoryImpl(private val dataStore: DataStoreRepository) : 
             title = this.title,
             packageName = this.packageName,
             autoPlay = this.autoPlay,
-            withCaption = this.withCaption
+            withCaption = this.withCaption,
+            mainWindow = this.mainWindow
         )
     }
 

@@ -34,7 +34,8 @@ internal fun DisplayAppPreset.toDomain() = SplitLaunchApp(
     title = title,
     packageName = packageName,
     autoPlay = autoPlay,
-    withCaption = withCaption
+    withCaption = withCaption,
+    mainWindow = mainWindow
 )
 
 internal fun DisplayPresetType.toDomain() = when (this) {

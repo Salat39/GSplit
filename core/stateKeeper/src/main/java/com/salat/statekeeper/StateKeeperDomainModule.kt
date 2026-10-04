@@ -3,11 +3,13 @@ package com.salat.statekeeper
 import com.salat.statekeeper.domain.repository.StateKeeperRepository
 import com.salat.statekeeper.domain.usecases.CheckAccessibilityServiceEnabledUseCase
 import com.salat.statekeeper.domain.usecases.CloseDarkScreenFlowUseCase
+import com.salat.statekeeper.domain.usecases.FindQuickSplitTargetUseCase
 import com.salat.statekeeper.domain.usecases.GetImportSettingsRequestUseCase
 import com.salat.statekeeper.domain.usecases.GetSkipAutoLaunchUseCase
 import com.salat.statekeeper.domain.usecases.LaunchLastFromPanelUseCase
 import com.salat.statekeeper.domain.usecases.LaunchPresetFromPanelUseCase
 import com.salat.statekeeper.domain.usecases.RequestImportSettingsUseCase
+import com.salat.statekeeper.domain.usecases.SetLaunchRunningUseCase
 import com.salat.statekeeper.domain.usecases.SetPresetPanelShownUseCase
 import com.salat.statekeeper.domain.usecases.SetSkipAutoLaunchUseCase
 import dagger.Module
@@ -49,4 +51,10 @@ object StateKeeperDomainModule {
 
     @Provides
     fun provideLaunchLastFromPanelUseCase(repository: StateKeeperRepository) = LaunchLastFromPanelUseCase(repository)
+
+    @Provides
+    fun provideSetLaunchRunningUseCase(repository: StateKeeperRepository) = SetLaunchRunningUseCase(repository)
+
+    @Provides
+    fun provideFindQuickSplitTargetUseCase(repository: StateKeeperRepository) = FindQuickSplitTargetUseCase(repository)
 }

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.systemGestureExclusion
@@ -48,6 +49,7 @@ import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntRect
@@ -85,7 +87,9 @@ internal fun FreeWindowFrame(
     color: Color,
     showWindowType: Boolean,
     isWindowTypeLocked: Boolean,
+    showMainWindow: Boolean,
     onChange: (DisplayFreeWindow) -> Unit,
+    onMainWindowChange: (Boolean) -> Unit,
     onGestureActive: (Boolean) -> Unit,
     onAppClick: () -> Unit,
     onClose: () -> Unit
@@ -95,6 +99,7 @@ internal fun FreeWindowFrame(
     val noCaptionToast = stringResource(R.string.window_type_no_caption_toast, window.app.appName)
     val pinnedHint = stringResource(R.string.window_type_pinned_hint)
     val adbHint = stringResource(R.string.window_type_adb_hint, stringResource(R.string.adb_features))
+    val mainWindowToast = stringResource(R.string.main_window_toast, window.app.appName)
     val currentWindow = rememberUpdatedState(window)
     val currentOnChange by rememberUpdatedState(onChange)
     val currentOnGestureActive = rememberUpdatedState(onGestureActive)
@@ -153,6 +158,21 @@ internal fun FreeWindowFrame(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+
+            if (showMainWindow) {
+                Spacer(Modifier.width(4.dp))
+                HeaderToggle(
+                    checked = window.app.mainWindow,
+                    iconRes = R.drawable.ic_crown,
+                    label = null,
+                    contentDescription = stringResource(R.string.main_window_short),
+                    color = color,
+                    onToggle = { enabled ->
+                        if (enabled) context.toast(mainWindowToast)
+                        onMainWindowChange(enabled)
+                    }
+                )
+            }
 
             if (window.app.isMediaApp) {
                 Spacer(Modifier.width(4.dp))
@@ -257,31 +277,34 @@ internal fun FreeWindowFrame(
 private fun HeaderToggle(
     checked: Boolean,
     @DrawableRes iconRes: Int,
-    label: String,
+    label: String?,
     color: Color,
-    onToggle: (Boolean) -> Unit
+    onToggle: (Boolean) -> Unit,
+    contentDescription: String? = null
 ) = Row(
     modifier = Modifier
         .clip(CircleShape)
         .background(if (checked) Color.White else Color.Transparent)
         .border(1.dp, Color.White.copy(if (checked) 1f else .7f), CircleShape)
-        .clickable { onToggle(!checked) }
-        .padding(horizontal = 7.dp, vertical = 3.dp),
+        .toggleable(value = checked, role = Role.Switch, onValueChange = onToggle)
+        .padding(horizontal = if (label == null) 10.dp else 7.dp, vertical = 3.dp),
     verticalAlignment = Alignment.CenterVertically
 ) {
     Icon(
         painter = rememberPainterResource(iconRes),
-        contentDescription = null,
+        contentDescription = contentDescription,
         tint = if (checked) color else Color.White,
-        modifier = Modifier.size(9.dp)
+        modifier = Modifier.size(if (label == null) 12.dp else 9.dp)
     )
-    Spacer(Modifier.width(4.dp))
-    Text(
-        text = label,
-        style = AppTheme.typography.idTitle.scaledWithLayout(),
-        color = if (checked) color else Color.White,
-        maxLines = 1
-    )
+    label?.let {
+        Spacer(Modifier.width(4.dp))
+        Text(
+            text = it,
+            style = AppTheme.typography.idTitle.scaledWithLayout(),
+            color = if (checked) color else Color.White,
+            maxLines = 1
+        )
+    }
 }
 
 @Composable

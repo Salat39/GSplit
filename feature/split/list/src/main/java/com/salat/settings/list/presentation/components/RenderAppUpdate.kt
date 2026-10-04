@@ -274,7 +274,7 @@ private fun Context.openUrlSmart(rawUrl: String, chooserTitle: String = "Open li
     // There's nothing to open and nowhere to look — let's copy it to the clipboard.
     val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     cm.setPrimaryClip(ClipData.newPlainText("URL", normalized))
-    Toast.makeText(this, "Link copied to clipboard", Toast.LENGTH_SHORT).show() // UI hint
+    Toast.makeText(applicationContext, "Link copied to clipboard", Toast.LENGTH_SHORT).show() // UI hint
     return OpenUrlResult.COPIED_TO_CLIPBOARD
 }
 

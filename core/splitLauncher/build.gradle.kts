@@ -13,6 +13,7 @@ android {
 
 dependencies {
     implementation(project(Modules.CORE_BASE))
+    implementation(project(Modules.CORE_RESOURCES))
     implementation(project(Modules.CORE_STATE_KEEPER))
     implementation(project(Modules.CORE_PREFERENCES))
     implementation(project(Modules.CORE_SCREEN_SPECS))

@@ -54,6 +54,7 @@ private const val TITLE_SPACE = 5
 internal fun FreePresetMenuItem(
     item: DisplaySplitPreset,
     presetsNames: Boolean,
+    showMainWindow: Boolean,
     onClick: (DisplaySplitPreset) -> Unit
 ) = Row(
     modifier = Modifier
@@ -80,7 +81,7 @@ internal fun FreePresetMenuItem(
     }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        WindowsGroup(item)
+        WindowsGroup(item, showMainWindow)
         if (presetsNames) {
             Spacer(Modifier.height(TITLE_SPACE.dp))
             Text(
@@ -95,7 +96,7 @@ internal fun FreePresetMenuItem(
 }
 
 @Composable
-private fun WindowsGroup(item: DisplaySplitPreset) = Box {
+private fun WindowsGroup(item: DisplaySplitPreset, showMainWindow: Boolean) = Box {
     val appCount = if (item.windows.size > MAX_CIRCLES) MAX_CIRCLES - 1 else item.windows.size
     val otherCount = item.windows.size - appCount
     val step = CIRCLE_SIZE - CIRCLE_OVERLAP
@@ -112,6 +113,15 @@ private fun WindowsGroup(item: DisplaySplitPreset) = Box {
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .offset(x = 3.dp, y = 3.dp)
+                )
+            }
+            if (showMainWindow && window.app.mainWindow) {
+                Badge(
+                    iconRes = R.drawable.ic_crown,
+                    background = AppTheme.colors.contentAccent,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .offset(x = 3.dp, y = (-3).dp)
                 )
             }
         }

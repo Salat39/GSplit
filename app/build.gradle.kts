@@ -198,6 +198,7 @@ dependencies {
     implementation(project(Modules.FEATURE_SETTINGS_APP_TASKS))
     implementation(project(Modules.FEATURE_SETTINGS_REPLACEMENT_APPS))
     implementation(project(Modules.FEATURE_SETTINGS_API))
+    implementation(project(Modules.FEATURE_SETTINGS_QUICK_SPLIT))
     implementation(project(Modules.FEATURE_OVERLAY))
 
     implementation(libs.androidx.core.ktx)
@@ -260,6 +261,7 @@ detekt {
         rootProject.file("/feature/settings/appTasks/src"),
         rootProject.file("/feature/settings/replacementApps/src"),
         rootProject.file("/feature/settings/api/src"),
+        rootProject.file("/feature/settings/quickSplit/src"),
         rootProject.file("/feature/overlay/src"),
     )
 }

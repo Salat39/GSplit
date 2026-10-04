@@ -21,7 +21,8 @@ class ShortcutActivity : ComponentActivity() {
             lastLaunchedHint = com.salat.resources.R.string.last_launched_shortcut_hint,
             onSelectPreset = ::performLaunchPresetAction,
             onSelectLastLaunched = ::performLastLaunchedAction,
-            onSelectPresetPanel = ::performPresetPanelAction
+            onSelectPresetPanel = ::performPresetPanelAction,
+            onSelectQuickSplit = ::performQuickSplitAction
         )
     }
 
@@ -132,13 +133,23 @@ class ShortcutActivity : ComponentActivity() {
         finish()
     }
 
+    private fun performPresetPanelAction() = setActivityShortcutResult(
+        activityClass = PresetPanelActivity::class.java,
+        name = getString(com.salat.resources.R.string.preset_panel)
+    )
+
+    private fun performQuickSplitAction() = setActivityShortcutResult(
+        activityClass = QuickSplitActivity::class.java,
+        name = getString(com.salat.resources.R.string.quick_split)
+    )
+
     @Suppress("DEPRECATION")
-    private fun performPresetPanelAction() {
-        val shortcutIntent = Intent(this, PresetPanelActivity::class.java).setAction(Intent.ACTION_VIEW)
+    private fun setActivityShortcutResult(activityClass: Class<out ComponentActivity>, name: String) {
+        val shortcutIntent = Intent(this, activityClass).setAction(Intent.ACTION_VIEW)
 
         val legacyShortcutIntent = Intent().apply {
             putExtra(Intent.EXTRA_SHORTCUT_INTENT, shortcutIntent)
-            putExtra(Intent.EXTRA_SHORTCUT_NAME, getString(com.salat.resources.R.string.preset_panel))
+            putExtra(Intent.EXTRA_SHORTCUT_NAME, name)
             putExtra(
                 Intent.EXTRA_SHORTCUT_ICON_RESOURCE,
                 Intent.ShortcutIconResource.fromContext(

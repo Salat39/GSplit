@@ -1,5 +1,6 @@
 package com.salat.settings.list.presentation.components
 
+import androidx.annotation.DrawableRes
 import androidx.annotation.StringRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
@@ -99,6 +100,7 @@ internal fun RenderListItem(
     type: RenderListType,
     showWindowShift: Boolean = true,
     showWindowType: Boolean = false,
+    showMainWindow: Boolean = false,
     dragHandle: Modifier? = null,
     lifted: Boolean = false,
     onClick: () -> Unit,
@@ -175,9 +177,19 @@ internal fun RenderListItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             if (preset.type == DisplayPresetType.FREE) {
-                FreePresetContent(preset = preset, showWindowType = showWindowType, modifier = Modifier.weight(1f))
+                FreePresetContent(
+                    preset = preset,
+                    showWindowType = showWindowType,
+                    showMainWindow = showMainWindow,
+                    modifier = Modifier.weight(1f)
+                )
             } else {
-                SplitPresetContent(preset = preset, showWindowShift = showWindowShift, showWindowType = showWindowType)
+                SplitPresetContent(
+                    preset = preset,
+                    showWindowShift = showWindowShift,
+                    showWindowType = showWindowType,
+                    showMainWindow = showMainWindow
+                )
             }
 
             dragHandle?.let { DragHandle(modifier = it, nudge = handleNudge, lifted = lifted) }
@@ -255,44 +267,58 @@ private fun CardFrameEdge(frame: CardFrame, isTop: Boolean) {
 }
 
 @Composable
-private fun RowScope.SplitPresetContent(preset: DisplaySplitPreset, showWindowShift: Boolean, showWindowType: Boolean) =
-    BoxWithConstraints(
-        modifier = Modifier.weight(1f)
-    ) {
-        val iconSize = if (maxWidth < CompactRowWidth) CompactIconSize else RegularIconSize
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            AppIcon(app = preset.firstApp, size = iconSize, playBadgeAtEnd = true)
+private fun RowScope.SplitPresetContent(
+    preset: DisplaySplitPreset,
+    showWindowShift: Boolean,
+    showWindowType: Boolean,
+    showMainWindow: Boolean
+) = BoxWithConstraints(
+    modifier = Modifier.weight(1f)
+) {
+    val iconSize = if (maxWidth < CompactRowWidth) CompactIconSize else RegularIconSize
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        AppIcon(
+            app = preset.firstApp,
+            size = iconSize,
+            playBadgeAtEnd = true,
+            showCrown = showMainWindow && preset.firstApp.mainWindow
+        )
 
-            Spacer(Modifier.width(IconTextGap))
+        Spacer(Modifier.width(IconTextGap))
 
-            AppTexts(
-                app = preset.firstApp,
-                alignEnd = false,
-                showCaption = showWindowType && preset.firstApp.withCaption,
-                modifier = Modifier.weight(1f)
-            )
+        AppTexts(
+            app = preset.firstApp,
+            alignEnd = false,
+            showCaption = showWindowType && preset.firstApp.withCaption,
+            modifier = Modifier.weight(1f)
+        )
 
-            RatioColumn(
-                preset = preset,
-                showWindowShift = showWindowShift,
-                modifier = Modifier.padding(horizontal = RatioColumnPadding)
-            )
+        RatioColumn(
+            preset = preset,
+            showWindowShift = showWindowShift,
+            modifier = Modifier.padding(horizontal = RatioColumnPadding)
+        )
 
-            AppTexts(
-                app = preset.secondApp,
-                alignEnd = true,
-                showCaption = showWindowType && preset.secondApp.withCaption,
-                modifier = Modifier.weight(1f)
-            )
+        AppTexts(
+            app = preset.secondApp,
+            alignEnd = true,
+            showCaption = showWindowType && preset.secondApp.withCaption,
+            modifier = Modifier.weight(1f)
+        )
 
-            Spacer(Modifier.width(IconTextGap))
+        Spacer(Modifier.width(IconTextGap))
 
-            AppIcon(app = preset.secondApp, size = iconSize, playBadgeAtEnd = false)
-        }
+        AppIcon(
+            app = preset.secondApp,
+            size = iconSize,
+            playBadgeAtEnd = false,
+            showCrown = showMainWindow && preset.secondApp.mainWindow
+        )
     }
+}
 
 @Composable
-private fun AppIcon(app: DisplayAppPreset, size: Dp, playBadgeAtEnd: Boolean) = Box(
+private fun AppIcon(app: DisplayAppPreset, size: Dp, playBadgeAtEnd: Boolean, showCrown: Boolean) = Box(
     modifier = Modifier.size(size),
     contentAlignment = if (playBadgeAtEnd) Alignment.BottomEnd else Alignment.BottomStart
 ) {
@@ -313,22 +339,37 @@ private fun AppIcon(app: DisplayAppPreset, size: Dp, playBadgeAtEnd: Boolean) = 
     }
 
     if (app.autoPlay == true) {
-        Icon(
+        IconBadge(
+            iconRes = R.drawable.ic_play,
+            modifier = Modifier.offset(x = if (playBadgeAtEnd) 4.dp else (-4).dp, y = 4.dp)
+        )
+    }
+
+    if (showCrown) {
+        IconBadge(
+            iconRes = R.drawable.ic_crown,
+            iconPadding = 2.dp,
             modifier = Modifier
-                .offset(x = if (playBadgeAtEnd) 4.dp else (-4).dp, y = 4.dp)
-                .size(18.dp)
-                .clip(CircleShape)
-                .background(AppTheme.colors.surfaceSettingsLayer1)
-                .padding(2.dp)
-                .clip(CircleShape)
-                .background(AppTheme.colors.contentAccent)
-                .padding(3.dp),
-            painter = rememberPainterResource(R.drawable.ic_play),
-            contentDescription = null,
-            tint = Color.White
+                .align(if (playBadgeAtEnd) Alignment.TopEnd else Alignment.TopStart)
+                .offset(x = if (playBadgeAtEnd) 5.dp else (-5).dp, y = (-5).dp)
         )
     }
 }
+
+@Composable
+private fun IconBadge(@DrawableRes iconRes: Int, modifier: Modifier, iconPadding: Dp = 3.dp) = Icon(
+    modifier = modifier
+        .size(18.dp)
+        .clip(CircleShape)
+        .background(AppTheme.colors.surfaceSettingsLayer1)
+        .padding(2.dp)
+        .clip(CircleShape)
+        .background(AppTheme.colors.contentAccent)
+        .padding(iconPadding),
+    painter = rememberPainterResource(iconRes),
+    contentDescription = null,
+    tint = Color.White
+)
 
 @Composable
 private fun AppTexts(app: DisplayAppPreset, alignEnd: Boolean, showCaption: Boolean, modifier: Modifier) = Column(
