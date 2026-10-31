@@ -43,7 +43,7 @@
     <string name="enable_dev_mode_car_guid">To activate \"Freeform Mode\", enable Developer Settings by running the command: \"adb shell settings put global development_settings_enabled 1\"</string>
 
     <string name="about_phone">About phone</string>
-    <string name="launch_preset">Launch preset</string>
+    <string name="launch_preset">GSplit preset</string>
     <string name="select_an_preset">Select a preset</string>
     <string name="preset_panel">Presets panel</string>
 
@@ -431,8 +431,12 @@ Launches the application in a free window. Position and size are percentages of 
 <br>
 <strong>Action 8</strong>: \"com.salat.gsplit.TOGGLE_PRESET_PANEL\"
 <br>
-Opens the presets panel, the same as the panel shortcut. Closes the panel if it is already open.]]></string>
-    <!--    <string name="about_text"><![CDATA[<strong>Launching from other apps:</strong><br>Send an intent \"com.salat.gsplit.PresetLauncherActivity\" with the parameter \"id\" containing the preset identifier to launch.<br><br><strong>Launching from MacroDroid:</strong><br>Actions -> Launch Shortcut -> GSplit Preset.<br><br><strong>Contacts:</strong><br>email: <a href="#email">%1$s</a>&#10240;<br>tg: <a href="#tg">%2$s</a>&#10240;]]></string>-->
+Opens the presets panel, the same as the panel shortcut. Closes the panel if it is already open
+<br>
+<br>
+<strong>Action 9</strong>: \"com.salat.gsplit.FULLSCREEN\"
+<br>
+Expands current split to fullscreen]]></string>
     <string name="search_apps">Search apps</string>
     <string name="nothing_found">Nothing found</string>
     <string name="choose_app">Choose app</string>

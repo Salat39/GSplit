@@ -39,7 +39,7 @@
     <string name="enable_dev_mode_guid">Для активации \"Freeform Mode\" включите режим разработчика. Перейдите в раздел «О телефоне», найдите «Номер сборки», нажмите на него 7 раз — появится сообщение, что режим разработчика активирован.</string>
     <string name="enable_dev_mode_car_guid">Для активации \"Freeform Mode\" включите настройки разработчика. Для этого вам необходимо отправить команду: \"adb shell settings put global development_settings_enabled 1\"</string>
     <string name="about_phone">О телефоне</string>
-    <string name="launch_preset">Действие пресета</string>
+    <string name="launch_preset">GSplit пресет</string>
     <string name="select_an_preset">Выберите пресет</string>
     <string name="preset_panel">Панель пресетов</string>
 
@@ -426,7 +426,12 @@
 <br>
 <strong>Действие 8</strong>: \"com.salat.gsplit.TOGGLE_PRESET_PANEL\"
 <br>
-Открывает панель пресетов, как ярлык панели. Закрывает панель, если она уже открыта.]]></string>
+Открывает панель пресетов, как ярлык панели. Закрывает панель, если она уже открыта.
+<br>
+<br>
+<strong>Действие 9</strong>: \"com.salat.gsplit.FULLSCREEN\"
+<br>
+Разворачивает текущий сплит в полный экран]]></string>
     <string name="search_apps">Поиск приложения</string>
     <string name="nothing_found">Ничего не найдено</string>
     <string name="choose_app">Выбрать приложение</string>

@@ -9,4 +9,6 @@ sealed class SplitLauncherEvent {
     ) : SplitLauncherEvent()
 
     data class MoveToFullscreen(val packageName: String) : SplitLauncherEvent()
+
+    data object FullscreenToSplit : SplitLauncherEvent()
 }

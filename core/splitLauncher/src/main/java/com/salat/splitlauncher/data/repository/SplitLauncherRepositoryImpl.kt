@@ -1152,8 +1152,23 @@ class SplitLauncherRepositoryImpl(
                     }
                 }
 
-                is SplitLauncherEvent.MoveToFullscreen -> moveWindowToFullscreen(event.packageName, isFree = false)
+                is SplitLauncherEvent.MoveToFullscreen -> {
+                    val isFree = stateKeeper.getLaunchedWindows()?.type == LaunchedSplitType.FREE
+                    moveWindowToFullscreen(event.packageName, isFree)
+                }
+
+                SplitLauncherEvent.FullscreenToSplit -> fullscreenToSplit()
             }
+        }
+    }
+
+    private suspend fun fullscreenToSplit() {
+        mainWindowMutex.withLock {
+            val session = stateKeeper.getLaunchedWindows() ?: return
+            if (session.type == LaunchedSplitType.FREE) return
+            listOf(session.firstAppPackage, session.secondAppPackage)
+                .filter { it.isNotBlank() }
+                .forEach { moveWindowToFullscreen(it, isFree = false) }
         }
     }
 

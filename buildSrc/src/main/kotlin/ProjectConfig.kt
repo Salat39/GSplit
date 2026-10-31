@@ -11,7 +11,7 @@ object ProjectConfig {
 
     const val VERSION_MAJOR = 3
     const val VERSION_MINOR = 2
-    const val VERSION_PATCH = 0
+    const val VERSION_PATCH = 1
     const val VERSION_FIX = 0
 
     const val VERSION_POSTFIX =

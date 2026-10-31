@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import com.salat.splitpresets.domain.repository.SplitPresetsRepository
 import com.salat.statekeeper.domain.entity.AccessibilityServiceEvent
+import com.salat.statekeeper.domain.entity.SplitLauncherEvent
 import com.salat.statekeeper.domain.repository.StateKeeperRepository
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -131,6 +132,10 @@ class BackgroundTaskReceiver : BroadcastReceiver() {
                         runCatching { context.startActivity(freeLaunch) }.onFailure { Timber.e(it) }
                     }
                 )
+            }
+
+            "$BASE_PATH.FULLSCREEN" -> scope.launch {
+                stateKeeper.sendSplitLauncherEvent(SplitLauncherEvent.FullscreenToSplit)
             }
 
             "$BASE_PATH.TOGGLE_PRESET_PANEL" -> runCatching {
