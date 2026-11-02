@@ -126,6 +126,7 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
 
     private val _splitStateBroadcastData = MutableStateFlow<SplitStateBroadcastData?>(null)
     private val splitStateBroadcastData = _splitStateBroadcastData.asStateFlow()
+    private var splitStateReportedFreeWindows = false
 
     private var taskSleep: Job? = null
     private var sleepTaskSessionId = -2L
@@ -300,6 +301,8 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
                     is AccessibilityServiceEvent.LaunchLast -> launchLast(event.fromPresetPanel)
 
                     is AccessibilityServiceEvent.CloseCurrentWindows -> closeCurrentWindowsTask(event.postAction)
+
+                    is AccessibilityServiceEvent.CloseFreeWindow -> closeFreeWindow(event.packageName)
                 }
             } catch (e: Exception) {
                 Timber.e(e)
@@ -527,11 +530,17 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
 
             // Notify external apps
             if (externalAppEventSync) {
+                val launchedConfig = stateKeeper.getLaunchedWindows()
+                val freeWindowsBroadcast = launchedConfig?.freeWindowPackages
+                    ?.filter { pkg -> freeWindows.any { it.packageName == pkg } }
+                    ?.joinToString(separator = ",")
+                    .orEmpty()
                 _splitStateBroadcastData.update {
                     SplitStateBroadcastData(
                         isShown = isAnyWindowShown,
                         firstPackageName = topWindow?.packageName ?: "",
-                        secondPackageName = bottomWindow?.packageName ?: ""
+                        secondPackageName = bottomWindow?.packageName ?: "",
+                        freeWindowPackages = freeWindowsBroadcast
                     )
                 }
             }
@@ -616,6 +625,7 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
         var bottomWindowCandidate: AccessibilityWindowInfo? = null
         val freePresetCandidates = mutableListOf<FreeFormWindow>()
         var isMainWindowFullScreen = false
+        val trackFreeWindows = split.freeWindowPackages.isNotEmpty()
 
         for (window in currentWindows) {
             // Check is no system app
@@ -635,8 +645,10 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
             window.root?.packageName?.let { wPcg ->
                 when (wPcg) {
                     // Application in freeform mode
-                    split.firstAppPackage -> topWindowCandidate = window
-                    split.secondAppPackage -> bottomWindowCandidate = window
+                    split.firstAppPackage ->
+                        if (!trackFreeWindows || topWindowCandidate == null) topWindowCandidate = window
+                    split.secondAppPackage ->
+                        if (!trackFreeWindows || bottomWindowCandidate == null) bottomWindowCandidate = window
                     in split.freeWindowPackages ->
                         freePresetCandidates += FreeFormWindow(wPcg.toString(), FreeFormPosition.FREE, window)
 
@@ -645,7 +657,11 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
             }
 
             // Break if already collected
-            if (topWindowCandidate != null && bottomWindowCandidate != null) break
+            if (topWindowCandidate != null && bottomWindowCandidate != null &&
+                split.freeWindowPackages.all { pkg -> freePresetCandidates.any { it.packageName == pkg } }
+            ) {
+                break
+            }
         }
 
         val freePresetWindows = freePresetCandidates.distinctBy { it.packageName }
@@ -1227,6 +1243,46 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
         postAction()
     }
 
+    @Suppress("ReturnCount")
+    private suspend fun closeFreeWindow(packageName: String) {
+        if (packageName.isEmpty()) return
+        val config = stateKeeper.getLaunchedWindows() ?: return
+        if (packageName !in config.freeWindowPackages) return
+        if (packageName == config.firstAppPackage || packageName == config.secondAppPackage) return
+
+        // Android 8 cannot remove one task. The window list can miss a covered window, so ADB closes the task
+        val isClosed = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P && adb.ensureConnected()) {
+            adb.getTaskId(packageName)?.let { adb.minimize(it) }
+            adb.getTaskId(packageName) == null
+        } else {
+            tapCloseShownWindow(packageName)
+        }
+        if (!isClosed) return
+
+        val current = stateKeeper.getLaunchedWindows() ?: return
+        if (current.sessionId != config.sessionId || packageName !in current.freeWindowPackages) return
+        // A preset window keeps its slot. The overlay replacement opens the new app in this slot
+        stateKeeper.setLaunchedWindows(
+            current.copy(freeWindowPackages = current.freeWindowPackages.filterNot { it == packageName })
+        )
+    }
+
+    // Returns true when the window is not in the window list after the tap
+    private suspend fun tapCloseShownWindow(packageName: String): Boolean {
+        val window = withTimeoutOrNull(AWAIT_TIMEOUT) {
+            shownWindows
+                .map { list -> list.find { it.packageName == packageName } }
+                .filterNotNull()
+                .first()
+        } ?: return false
+        withTimeoutOrNull(AWAIT_TIMEOUT) {
+            suspendCancellableCoroutine { continuation -> closeWindow(window) { continuation.resume(Unit) } }
+        }
+        return withTimeoutOrNull(AWAIT_TIMEOUT) {
+            shownWindows.first { list -> list.none { it.packageName == packageName } }
+        } != null
+    }
+
     private fun onReplaceWindowTask(index: Int, packageName: String, autoPlay: Boolean) =
         stateKeeper.getLaunchedWindows()?.let { currentSplit ->
             serviceScope.launch(Dispatchers.IO) {
@@ -1331,12 +1387,16 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
     }
 
     private suspend fun sendSplitStateBroadcast(data: SplitStateBroadcastData) {
+        val freeWindows = data.freeWindowPackages
+        val reportFreeWindows = freeWindows.isNotEmpty() || splitStateReportedFreeWindows
+        splitStateReportedFreeWindows = freeWindows.isNotEmpty()
         val intent = Intent().apply {
             action = "$BASE_PATH.SPLIT_STATE"
             // `package` = MACRO_DROID_PACKAGE
             putExtra("is_active", if (data.isShown) "1" else "0")
             putExtra("first_window", data.firstPackageName)
             putExtra("second_window", data.secondPackageName)
+            if (reportFreeWindows) putExtra("free_windows", freeWindows)
         }
         withContext(Dispatchers.Main) { sendBroadcast(intent) }
         Timber.d("sending $BASE_PATH.SPLIT_STATE broadcast with $data")

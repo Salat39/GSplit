@@ -29,4 +29,6 @@ sealed class AccessibilityServiceEvent {
     data class LaunchLast(val fromPresetPanel: Boolean = false) : AccessibilityServiceEvent()
 
     data class CloseCurrentWindows(val postAction: suspend () -> Unit) : AccessibilityServiceEvent()
+
+    data class CloseFreeWindow(val packageName: String) : AccessibilityServiceEvent()
 }

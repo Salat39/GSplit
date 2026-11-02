@@ -279,9 +279,13 @@ class SplitLauncherRepositoryImpl(
         source: SplitLaunchSource,
         replacedFreeWindow: SplitLaunchWindow?
     ) {
+        val appendedSession = stateKeeper.getLaunchedWindows()?.takeIf {
+            task.type == SplitLaunchType.FREE && task.appendToSession && replacedFreeWindow == null &&
+                it.sessionId != stateKeeper.getClosedSessionId()
+        }
         val sessionId = System.currentTimeMillis()
         try {
-            launchSplitSession(task, source, replacedFreeWindow, sessionId)
+            launchSplitSession(task, source, replacedFreeWindow, sessionId, appendedSession)
         } finally {
             if (stateKeeper.getLaunchedWindows()?.sessionId == sessionId) {
                 stateKeeper.setPlacedWindowsSessionId(sessionId)
@@ -293,7 +297,8 @@ class SplitLauncherRepositoryImpl(
         task: SplitLaunchTask,
         source: SplitLaunchSource,
         replacedFreeWindow: SplitLaunchWindow?,
-        sessionId: Long
+        sessionId: Long,
+        appendedSession: LaunchedWindowsConfig?
     ) {
         val isFree = task.type == SplitLaunchType.FREE
         // Pinned windows start last. The window tracking expects the last launched window on top
@@ -304,8 +309,32 @@ class SplitLauncherRepositoryImpl(
         // Windows without caption do not overlap, the bottom window shift is only for the legacy freeform flow
         val shiftBottomWindow = task.bottomWindowShift && !noCaptionWindows
 
+        val previousConfig = stateKeeper.getLaunchedWindows()
+        val newFreePackage = startedFreeWindows.singleOrNull()?.app?.packageName.orEmpty()
+        if (appendedSession != null &&
+            (newFreePackage == appendedSession.firstAppPackage || newFreePackage == appendedSession.secondAppPackage)
+        ) {
+            return
+        }
+        // The replacement task of a split window has only the new app
+        val isWindowReplacement = if (isFree) {
+            replacedFreeWindow != null
+        } else task.firstApp == null || task.secondApp == null
+        // Free windows added to an open session stay in the session when a window of the session is replaced
+        val addedFreePackages = previousConfig?.takeIf { isWindowReplacement }
+            ?.let { it.freeWindowPackages - it.freePresetWindowPackages.toSet() }
+            .orEmpty()
+
         // Set launched config to accessibility service
-        val launchConfig = if (isFree) {
+        // An added free window is not a preset window. The overlay replaces only the preset windows
+        // The new session id keeps the open windows covered until the added window gets its bounds
+        val launchConfig = if (appendedSession != null) {
+            appendedSession.copy(
+                sessionId = sessionId,
+                freeWindowPackages = appendedSession.freeWindowPackages.filterNot { it == newFreePackage } +
+                    newFreePackage
+            )
+        } else if (isFree) {
             LaunchedWindowsConfig(
                 firstAppPackage = "",
                 secondAppPackage = "",
@@ -315,7 +344,7 @@ class SplitLauncherRepositoryImpl(
                 type = task.type.toLaunchedType(),
                 presetId = task.id,
                 sessionId = sessionId,
-                freeWindowPackages = freeWindows.map { it.app.packageName },
+                freeWindowPackages = freeWindows.map { it.app.packageName } + addedFreePackages,
                 freePresetWindowPackages = task.windows.map { it.app.packageName }
             )
         } else {
@@ -333,17 +362,12 @@ class SplitLauncherRepositoryImpl(
                 type = task.type.toLaunchedType(),
                 presetId = task.id,
                 sessionId = sessionId,
-                ratio = task.ratio
+                ratio = task.ratio,
+                freeWindowPackages = addedFreePackages
             )
         }
-        // The replacement task of a split window has only the new app
-        val isWindowReplacement = if (isFree) {
-            replacedFreeWindow != null
-        } else task.firstApp == null || task.secondApp == null
-        val previousConfig = stateKeeper.getLaunchedWindows()
-        val sessionPackages = if (isFree) {
-            launchConfig.freeWindowPackages
-        } else listOf(launchConfig.firstAppPackage, launchConfig.secondAppPackage)
+        val sessionPackages = listOf(launchConfig.firstAppPackage, launchConfig.secondAppPackage)
+            .filter { it.isNotEmpty() } + launchConfig.freeWindowPackages
         val keepsExpandedMainWindow = isWindowReplacement && previousConfig?.mainWindowExpanded == true &&
             previousConfig.mainWindowPackage.let { it.isEmpty() || it in sessionPackages }
         // A replaced window keeps the quick split while the open app stays in the split
@@ -355,16 +379,22 @@ class SplitLauncherRepositoryImpl(
             ?.takeIf { replacedFreeWindow == null && resolveMainWindowSwitch(isFree) != null }
         ownWindowsMutex.withLock {
             stateKeeper.setLaunchedWindows(
-                launchConfig.copy(
-                    mainWindowPackage = mainWindowPackage.orEmpty(),
-                    mainWindowExpanded = keepsExpandedMainWindow,
-                    quickSplitOpenPackage = quickSplitOpenPackage
-                )
+                if (appendedSession != null) {
+                    launchConfig
+                } else {
+                    launchConfig.copy(
+                        mainWindowPackage = mainWindowPackage.orEmpty(),
+                        mainWindowExpanded = keepsExpandedMainWindow,
+                        quickSplitOpenPackage = quickSplitOpenPackage
+                    )
+                }
             )
         }
-        launchedFreeTask = task.takeIf { isFree }
-        mainWindowTask = task.takeIf { mainWindowPackage != null }
-        saveLastLaunchedTask(task)
+        if (appendedSession == null) {
+            launchedFreeTask = task.takeIf { isFree }
+            mainWindowTask = task.takeIf { mainWindowPackage != null }
+            saveLastLaunchedTask(task)
+        }
 
         bypassHiddenApiRestrictions()
         delay(25L)
@@ -414,8 +444,11 @@ class SplitLauncherRepositoryImpl(
         val setWindowingModeCode = setTaskWindowingModeCode.takeIf { enableAdbTaskResize && !nativeSplit }
 
         val movesFullscreenApps = enableAdbHelper && (enableAdbForceStop || setWindowingModeCode != null)
-        // The open windows of a preset with the main window come back as they are. A new task would duplicate them
-        val reusesOpenWindows = mainWindowPackage != null || previousConfig?.isOpenMainWindowSessionOf(task.id) == true
+        // The open windows of a preset with the main window and an open added free window come back as they are
+        // A new task would duplicate them
+        val reusesOpenWindows = mainWindowPackage != null ||
+            previousConfig?.isOpenMainWindowSessionOf(task.id) == true ||
+            newFreePackage in appendedSession?.freeWindowPackages.orEmpty()
         val isAdbReady = (movesFullscreenApps || reusesOpenWindows) && adbHelper.ensureConnected()
         val windowStates = if (isAdbReady) {
             launchApps.map { it.packageName }.distinct().associateWith { adbHelper.isAppInWindow(it) }
@@ -576,8 +609,8 @@ class SplitLauncherRepositoryImpl(
         stateKeeper.setPlacedWindowsSessionId(launchConfig.sessionId)
         _splitStartedFlow.emit(Pair(source, task))
 
-        // Notify external apps
-        if (externalAppEventSync) sendInitSplitBroadcast(task)
+        // Notify external apps. An added free window does not change the split, SPLIT_STATE reports it
+        if (externalAppEventSync && appendedSession == null) sendInitSplitBroadcast(task)
 
         val autoPlayApps = launchApps.filter { it.autoPlay == true && it.packageName !in openWindowTaskIds }
         if (!playBetweenWindows && autoPlayApps.isNotEmpty()) {

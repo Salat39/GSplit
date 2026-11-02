@@ -240,7 +240,8 @@ class PresetLauncherViewModel @Inject constructor(
         bounds: FloatArray,
         autoPlay: Boolean,
         pin: Boolean,
-        withCaption: Boolean
+        withCaption: Boolean,
+        appendToSession: Boolean = false
     ) = launchSplitTask {
         val (left, top, right, bottom) = bounds
         val window = SplitLaunchWindow(
@@ -264,7 +265,8 @@ class PresetLauncherViewModel @Inject constructor(
             darkBackground = false,
             bottomWindowShift = false,
             id = 0L,
-            windows = listOf(window)
+            windows = listOf(window),
+            appendToSession = appendToSession
         )
 
         launchSplitUseCase.execute(task, SplitLaunchSource.SHORTCUT)

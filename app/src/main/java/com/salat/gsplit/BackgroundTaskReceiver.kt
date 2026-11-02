@@ -119,6 +119,7 @@ class BackgroundTaskReceiver : BroadcastReceiver() {
                 val height = intent.getIntExtra("height", 40).coerceIn(1, 100)
                 val x = intent.getIntExtra("x", 10).coerceIn(0, 100 - width)
                 val y = intent.getIntExtra("y", 10).coerceIn(0, 100 - height)
+                val keepWindows = intent.getIntExtra("keep_windows", 0) == 1
                 val freeLaunch = Intent(context, PresetLauncherActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     .putExtra("free_package", packageName)
@@ -126,12 +127,27 @@ class BackgroundTaskReceiver : BroadcastReceiver() {
                     .putExtra("free_auto_play", intent.getIntExtra("auto_play", 0) == 1)
                     .putExtra("free_pin", intent.getIntExtra("pin", 0) == 1)
                     .putExtra("free_caption", intent.getIntExtra("caption", 0) == 1)
+                    .putExtra("free_keep_windows", keepWindows)
+                val startFreeLaunch: suspend () -> Unit = {
+                    runCatching { context.startActivity(freeLaunch) }.onFailure { Timber.e(it) }
+                }
 
-                stateKeeper.sendAccessibilityServiceEvent(
-                    AccessibilityServiceEvent.CloseCurrentWindows {
-                        runCatching { context.startActivity(freeLaunch) }.onFailure { Timber.e(it) }
-                    }
-                )
+                if (keepWindows) {
+                    startFreeLaunch()
+                } else {
+                    stateKeeper.sendAccessibilityServiceEvent(
+                        AccessibilityServiceEvent.CloseCurrentWindows(startFreeLaunch)
+                    )
+                }
+            }
+
+            "$BASE_PATH.CLOSE_FREE_WINDOW" -> scope.launch {
+                val packageName = intent.getStringExtra("package") ?: ""
+                if (packageName.isNotEmpty()) {
+                    stateKeeper.sendAccessibilityServiceEvent(
+                        AccessibilityServiceEvent.CloseFreeWindow(packageName)
+                    )
+                }
             }
 
             "$BASE_PATH.FULLSCREEN" -> scope.launch {

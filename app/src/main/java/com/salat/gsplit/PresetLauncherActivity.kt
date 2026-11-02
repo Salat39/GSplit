@@ -129,7 +129,8 @@ class PresetLauncherActivity : ComponentActivity() {
                 bounds = freeBounds,
                 autoPlay = intent.getBooleanExtra("free_auto_play", false),
                 pin = intent.getBooleanExtra("free_pin", false),
-                withCaption = intent.getBooleanExtra("free_caption", false)
+                withCaption = intent.getBooleanExtra("free_caption", false),
+                appendToSession = intent.getBooleanExtra("free_keep_windows", false)
             )
         } else if (firstPackage.isNotEmpty() && secondPackage.isNotEmpty()) {
             val firstAutoPlay = intent.getIntExtra("first_auto_play", 0)

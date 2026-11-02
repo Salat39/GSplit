@@ -211,6 +211,7 @@
                 <action android:name="com.salat.gsplit.LAUNCH_AUTOSTART" />
                 <action android:name="com.salat.gsplit.CUSTOM_LAUNCH" />
                 <action android:name="com.salat.gsplit.FREE_LAUNCH" />
+                <action android:name="com.salat.gsplit.CLOSE_FREE_WINDOW" />
                 <action android:name="com.salat.gsplit.FULLSCREEN" />
                 <action android:name="com.salat.gsplit.TOGGLE_PRESET_PANEL" />
             </intent-filter>

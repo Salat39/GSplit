@@ -372,6 +372,11 @@ Takes the package name of the first (top) window when the window is active; retu
 Takes the package name of the second (bottom) window when the window is active; returns an empty string when no window is active.
 <br>
 <br>
+<strong>Extra 4</strong>: \"free_windows\" -> value \"*\" -> select the variable to store the value.
+<br>
+Comma-separated package names of visible free windows, in launch order. The extra is not added when there are no free windows, so the broadcast stays the same as before. After the last free window closes, the extra is sent once as an empty string.
+<br>
+<br>
 You can then monitor these variables in your scripts to detect the current split state.]]></string>
     <string name="api_text2"><![CDATA[<strong>Launching Presets via Shortcuts:</strong>
 <br>
@@ -424,9 +429,9 @@ Launches a split with the specified configuration. first_caption and second_capt
 <br>
 <strong>Action 7</strong>: \"com.salat.gsplit.FREE_LAUNCH\"
 <br>
-Parameters: package, x:[0..100], y:[0..100], width:[1..100], height:[1..100], auto_play:[0|1], pin:[0|1], caption:[0|1]
+Parameters: package, x:[0..100], y:[0..100], width:[1..100], height:[1..100], auto_play:[0|1], pin:[0|1], caption:[0|1], keep_windows:[0|1]
 <br>
-Launches the application in a free window. Position and size are percentages of the screen area between the status bar and the navigation bar. A pinned window stays on top of other windows and always opens with the top bar. caption sets the window type: 1 — with the top bar, 0 — without the top bar (default). The window opens without the top bar only when the “Allow windows without the top bar” setting is on and ADB is connected. Closes the current split if it is open.
+Launches the application in a free window. Position and size are percentages of the screen area between the status bar and the navigation bar. A pinned window stays on top of other windows and always opens with the top bar. caption sets the window type: 1 — with the top bar, 0 — without the top bar (default). The window opens without the top bar only when the “Allow windows without the top bar” setting is on and ADB is connected. keep_windows: 1 — keep already open windows and add the new free window; 0 (default) — close the current split or free windows before launch.
 <br>
 <br>
 <strong>Action 8</strong>: \"com.salat.gsplit.TOGGLE_PRESET_PANEL\"
@@ -436,7 +441,14 @@ Opens the presets panel, the same as the panel shortcut. Closes the panel if it 
 <br>
 <strong>Action 9</strong>: \"com.salat.gsplit.FULLSCREEN\"
 <br>
-Expands current split to fullscreen]]></string>
+Expands current split to fullscreen
+<br>
+<br>
+<strong>Action 10</strong>: \"com.salat.gsplit.CLOSE_FREE_WINDOW\"
+<br>
+Parameters: package
+<br>
+Closes the free window with the given package name (see free_windows in SPLIT_STATE). Without ADB, only a visible window closes. Does not close split windows or other free windows.]]></string>
     <string name="search_apps">Search apps</string>
     <string name="nothing_found">Nothing found</string>
     <string name="choose_app">Choose app</string>
