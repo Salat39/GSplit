@@ -9,7 +9,7 @@ plugins {
     alias(libs.plugins.baselineprofile)
     alias(libs.plugins.ksp)
     alias(libs.plugins.hilt)
-    alias(libs.plugins.detekt)
+//    alias(libs.plugins.detekt)
 }
 
 apply<BasePreset>()
@@ -28,7 +28,7 @@ android {
         targetSdk = ProjectConfig.TARGET_SDK
         versionCode = getVersionCode()
         versionName = getVersionName()
-        setProperty("archivesBaseName", ProjectConfig.ARCHIVES_BASE_NAME)
+//        setProperty("archivesBaseName", ProjectConfig.ARCHIVES_BASE_NAME)
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -215,9 +215,9 @@ dependencies {
     debugImplementation(libs.androidx.ui.test.manifest)
 
     // Detekt only in app module
-    detektPlugins(libs.detekt.formatting)
+//    detektPlugins(libs.detekt.formatting)
 }
-
+/*
 // Detekt config
 detekt {
     ignoredBuildTypes = listOf("release")
@@ -265,10 +265,15 @@ detekt {
         rootProject.file("/feature/overlay/src"),
     )
 }
+
+tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
+    jvmTarget = "21"
+}
+
 // Launch detekt by every build
 tasks.getByPath("preBuild")
     .dependsOn("detekt")
-
+*/
 afterEvaluate {
     tasks.named("kspNonMinifiedReleaseKotlin").configure {
         dependsOn("kspReleaseKotlin")

@@ -300,6 +300,8 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
                     is AccessibilityServiceEvent.LaunchLast -> launchLast(event.fromPresetPanel)
 
                     is AccessibilityServiceEvent.CloseCurrentWindows -> closeCurrentWindowsTask(event.postAction)
+
+                    is AccessibilityServiceEvent.CloseSpecificWindow -> closeSpecificWindow(event.packageName)
                 }
             } catch (e: Exception) {
                 Timber.e(e)
@@ -1225,6 +1227,30 @@ class AutoLaunchAccessibilityService : AccessibilityService() {
         }
 
         postAction()
+    }
+
+    /**
+     * Закрывает конкретное окно по имени пакета, не трогая остальные.
+     */
+    private suspend fun closeSpecificWindow(packageName: String) {
+        if (packageName.isEmpty()) return
+
+        // Ищем окно в текущем списке отображаемых окон, используя существующую логику поиска
+        val win = withTimeoutOrNull(AWAIT_TIMEOUT) {
+            shownWindows
+                .map { list -> list.find { it.packageName == packageName } }
+                .filterNotNull()
+                .first()
+        }
+
+        if (win != null) {
+            Timber.d("[AS] Closing specific window for package: $packageName")
+            closeWindow(win)
+            // Небольшая задержка для стабильности UI перед завершением корутины
+            delay(300L)
+        } else {
+            Timber.w("[AS] Specific window for package '$packageName' not found in shownWindows to close")
+        }
     }
 
     private fun onReplaceWindowTask(index: Int, packageName: String, autoPlay: Boolean) =

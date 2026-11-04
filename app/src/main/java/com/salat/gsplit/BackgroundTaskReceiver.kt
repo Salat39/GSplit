@@ -126,11 +126,20 @@ class BackgroundTaskReceiver : BroadcastReceiver() {
                     .putExtra("free_pin", intent.getIntExtra("pin", 0) == 1)
                     .putExtra("free_caption", intent.getIntExtra("caption", 0) == 1)
 
-                stateKeeper.sendAccessibilityServiceEvent(
-                    AccessibilityServiceEvent.CloseCurrentWindows {
-                        runCatching { context.startActivity(freeLaunch) }.onFailure { Timber.e(it) }
-                    }
-                )
+//                stateKeeper.sendAccessibilityServiceEvent(
+//                    AccessibilityServiceEvent.CloseCurrentWindows {
+                runCatching { context.startActivity(freeLaunch) }.onFailure { Timber.e(it) }
+//                    }
+//                )
+            }
+
+            "$BASE_PATH.CLOSE_WINDOW" -> scope.launch {
+                val packageName = intent.getStringExtra("package") ?: ""
+                if (packageName.isNotEmpty()) {
+                    stateKeeper.sendAccessibilityServiceEvent(
+                        AccessibilityServiceEvent.CloseSpecificWindow(packageName)
+                    )
+                }
             }
 
             "$BASE_PATH.TOGGLE_PRESET_PANEL" -> runCatching {
