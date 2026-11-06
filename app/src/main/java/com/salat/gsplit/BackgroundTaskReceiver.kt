@@ -118,6 +118,7 @@ class BackgroundTaskReceiver : BroadcastReceiver() {
                 val height = intent.getIntExtra("height", 40).coerceIn(1, 100)
                 val x = intent.getIntExtra("x", 10).coerceIn(0, 100 - width)
                 val y = intent.getIntExtra("y", 10).coerceIn(0, 100 - height)
+                val darkBackground = intent.getIntExtra("dark_background", 0)
                 val freeLaunch = Intent(context, PresetLauncherActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     .putExtra("free_package", packageName)
@@ -125,6 +126,7 @@ class BackgroundTaskReceiver : BroadcastReceiver() {
                     .putExtra("free_auto_play", intent.getIntExtra("auto_play", 0) == 1)
                     .putExtra("free_pin", intent.getIntExtra("pin", 0) == 1)
                     .putExtra("free_caption", intent.getIntExtra("caption", 0) == 1)
+                    .putExtra("free_dark_background", darkBackground)
 
 //                stateKeeper.sendAccessibilityServiceEvent(
 //                    AccessibilityServiceEvent.CloseCurrentWindows {

@@ -240,7 +240,8 @@ class PresetLauncherViewModel @Inject constructor(
         bounds: FloatArray,
         autoPlay: Boolean,
         pin: Boolean,
-        withCaption: Boolean
+        withCaption: Boolean,
+        darkBackground: Boolean = false
     ) = launchSplitTask {
         val (left, top, right, bottom) = bounds
         val window = SplitLaunchWindow(
@@ -261,18 +262,25 @@ class PresetLauncherViewModel @Inject constructor(
             type = SplitLaunchType.FREE,
             secondApp = null,
             autoStart = false,
-            darkBackground = false,
+            darkBackground = darkBackground,
             bottomWindowShift = false,
             id = 0L,
             windows = listOf(window)
         )
+
+        if (task.darkBackground) {
+            _toolbarExtraSizeState.emit(loadIntPrefUseCase.execute(IntPref.ToolbarExtraSpace))
+            _launchDarkScreenState.emit(true)
+        }
 
         launchSplitUseCase.execute(task, SplitLaunchSource.SHORTCUT)
 
         // disable split autorun on application startup
         setSkipAutoLaunchUseCase.execute(true)
 
-        _finishState.send(Unit)
+        if (!task.darkBackground) {
+            _finishState.send(Unit)
+        }
     }
 
     private fun LastLaunchedApp.toSplitLaunchApp(): SplitLaunchApp {
