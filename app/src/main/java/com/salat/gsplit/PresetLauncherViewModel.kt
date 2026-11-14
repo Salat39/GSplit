@@ -62,6 +62,13 @@ class PresetLauncherViewModel @Inject constructor(
     private val _toolbarExtraSizeState = MutableStateFlow(0)
     val toolbarExtraSizeState = _toolbarExtraSizeState.asStateFlow()
 
+    companion object {
+        private const val BAR_DARK_SCREEN_DURATION = 1500L // время жизни чёрной полосы
+    }
+
+    private val _launchBarDarkScreenState = MutableStateFlow(false)
+    val launchBarDarkScreenState = _launchBarDarkScreenState.asStateFlow()
+
     init {
         viewModelScope.launch {
             // Collect ui scale
@@ -262,15 +269,15 @@ class PresetLauncherViewModel @Inject constructor(
             type = SplitLaunchType.FREE,
             secondApp = null,
             autoStart = false,
-            darkBackground = darkBackground,
+            darkBackground = false,
             bottomWindowShift = false,
             id = 0L,
             windows = listOf(window)
         )
 
-        if (task.darkBackground) {
+        if (darkBackground) {
             _toolbarExtraSizeState.emit(loadIntPrefUseCase.execute(IntPref.ToolbarExtraSpace))
-            _launchDarkScreenState.emit(true)
+            _launchBarDarkScreenState.emit(true)
         }
 
         launchSplitUseCase.execute(task, SplitLaunchSource.SHORTCUT)
@@ -278,7 +285,7 @@ class PresetLauncherViewModel @Inject constructor(
         // disable split autorun on application startup
         setSkipAutoLaunchUseCase.execute(true)
 
-        if (!task.darkBackground) {
+        if (!darkBackground) {
             _finishState.send(Unit)
         }
     }

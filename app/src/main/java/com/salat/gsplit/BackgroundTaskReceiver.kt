@@ -121,6 +121,7 @@ class BackgroundTaskReceiver : BroadcastReceiver() {
                 val darkBackground = intent.getIntExtra("dark_background", 0)
                 val freeLaunch = Intent(context, PresetLauncherActivity::class.java)
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
                     .putExtra("free_package", packageName)
                     .putExtra("free_bounds", intArrayOf(x, y, x + width, y + height).map { it / 100f }.toFloatArray())
                     .putExtra("free_auto_play", intent.getIntExtra("auto_play", 0) == 1)

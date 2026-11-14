@@ -1,7 +1,10 @@
 package com.salat.gsplit
 
 import android.content.Intent
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
+import android.view.Gravity
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -10,6 +13,7 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -45,7 +49,12 @@ class PresetLauncherActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setContent {
             val darkScreen by viewModel.launchDarkScreenState.collectAsStateWithLifecycle()
+            val barDarkScreen by viewModel.launchBarDarkScreenState.collectAsStateWithLifecycle()
             val toolbarExtraSize by viewModel.toolbarExtraSizeState.collectAsStateWithLifecycle()
+
+            LaunchedEffect(barDarkScreen) {
+                if (barDarkScreen) applyBarOnlyDarkMode()
+            }
 
             if (darkScreen) {
                 val uiScale by viewModel.uiScaleState.collectAsStateWithLifecycle()
@@ -168,6 +177,27 @@ class PresetLauncherActivity : ComponentActivity() {
             window.setWindowAnimations(0)
             finish()
         } catch (_: Exception) {
+        }
+    }
+
+    private fun applyBarOnlyDarkMode() {
+        val id = resources.getIdentifier("status_bar_height", "dimen", "android")
+        val barHeight = if (id > 0) {
+            resources.getDimensionPixelSize(id)
+        } else {
+            (24 * resources.displayMetrics.density).toInt()
+        }
+        window.apply {
+            setWindowAnimations(0)
+            setLayout(WindowManager.LayoutParams.MATCH_PARENT, barHeight)
+            attributes = attributes.apply {
+                gravity = Gravity.TOP
+                // Полоса не перехватывает фокус и тапы — окна под ней остаются рабочими
+                flags = flags or
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+            }
+            setBackgroundDrawable(android.graphics.drawable.ColorDrawable(android.graphics.Color.BLACK))
         }
     }
 }
